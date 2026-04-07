@@ -1,5 +1,6 @@
 import logging
 import time
+from flask_socketio import emit
 from app.extensions import mongo, socketio
 
 logger = logging.getLogger(__name__)
@@ -54,17 +55,25 @@ def enrich_transactions(transactions):
             txn["fuel_type"] = fp["fuel_type"]
             txn["unit"] = fp["unit"]
             txn["currency"] = fp["currency"]
+        
+        vehicle = mongo.db["vehicles"].find_one({"_id": txn["vehicle_id"]}, {"vehicle_number": 1})
+        txn["vehicle_number"] = vehicle["vehicle_number"] if vehicle else txn["vehicle_id"]
+        pump = mongo.db["pumps"].find_one({"_id": txn["pump_id"]}, {"name": 1})
+        txn["pump_name"] = pump["name"] if pump else txn["pump_id"]
+
     return transactions
 
 
 @socketio.on("connect", namespace="/dashboard")
-def on_connect():
+def on_connect(auth=None):
     logger.info("Dashboard client connected")
     stats = get_dashboard_stats()
     recent = list(mongo.db["transactions"].find().sort("created_at", -1).limit(20))
     recent = enrich_transactions(recent)
-    socketio.emit("init", {"stats": stats, "transactions": recent}, namespace="/dashboard")
+    emit("init", {"stats": stats, "transactions": recent})
 
 
 def register_socket_events():
     socketio.start_background_task(watch_transactions)
+
+    

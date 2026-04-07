@@ -72,12 +72,13 @@
             document.getElementById("total_revenue").textContent = stats.total_revenue.toLocaleString();
             document.getElementById("total_fuel").textContent = stats.total_fuel_dispensed;
 
+            document.getElementById("transactions").innerHTML = "";
             data.transactions.forEach(txn => {
                 const row = document.createElement("tr");
                 row.innerHTML = `
                     <td>${txn.created_at}</td>
-                    <td>${txn.vehicle_id}</td>
-                    <td>${txn.pump_id}</td>
+                    <td>${txn.vehicle_number}</td>
+                    <td>${txn.pump_name}</td>
                     <td>${txn.fuel_type}</td>
                     <td>${txn.quantity} ${txn.unit}</td>
                     <td>${txn.currency} ${txn.total_price.toLocaleString()}</td>
@@ -99,8 +100,8 @@
             const time = new Date().toLocaleTimeString();
             row.innerHTML = `
                 <td>${time}</td>
-                <td>${txn.vehicle_id}</td>
-                <td>${txn.pump_id}</td>
+                <td>${txn.vehicle_number}</td>
+                <td>${txn.pump_name}</td>
                 <td>${txn.fuel_type}</td>
                 <td>${txn.quantity} ${txn.unit}</td>
                 <td>${txn.currency} ${txn.total_price.toLocaleString()}</td>
