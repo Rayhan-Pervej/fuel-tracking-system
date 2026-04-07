@@ -3,7 +3,7 @@ from unittest.mock import patch
 
 VEHICLE = {"_id": "veh-1", "vehicle_number": "DH-1234", "type": "car"}
 PUMP = {"_id": "pump-1", "name": "Shell", "location": "Dhaka", "license": "P-001"}
-FUEL_PRICE = {"_id": "fp-1", "fuel_type": "octane", "price_per_unit": 125.0, "unit": "liter", "effective_from": "2025-01-01"}
+FUEL_PRICE = {"_id": "fp-1", "fuel_type": "octane", "price_per_unit": 125.0, "unit": "liter", "currency": "BDT", "effective_from": "2025-01-01"}
 
 TRANSACTION_PAYLOAD = {
     "vehicle_id": "veh-1",
@@ -17,8 +17,10 @@ class TestCreateTransaction:
     def test_success(self, client):
         created = {
             "_id": "txn-1",
-            **TRANSACTION_PAYLOAD,
+            "vehicle_id": "veh-1",
+            "pump_id": "pump-1",
             "fuel_price_id": "fp-1",
+            "quantity": 10.0,
             "total_price": 1250.0,
             "created_at": "2025-01-01"
         }
