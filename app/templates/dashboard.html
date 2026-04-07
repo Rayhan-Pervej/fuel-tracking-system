@@ -69,8 +69,8 @@
         ns.on("init", (data) => {
             const stats = data.stats;
             document.getElementById("total_transactions").textContent = stats.total_transactions;
-            document.getElementById("total_revenue").textContent = "৳ " + stats.total_revenue.toLocaleString();
-            document.getElementById("total_fuel").textContent = stats.total_fuel_dispensed + " L";
+            document.getElementById("total_revenue").textContent = stats.total_revenue.toLocaleString();
+            document.getElementById("total_fuel").textContent = stats.total_fuel_dispensed;
 
             data.transactions.forEach(txn => {
                 const row = document.createElement("tr");
@@ -79,8 +79,8 @@
                     <td>${txn.vehicle_id}</td>
                     <td>${txn.pump_id}</td>
                     <td>${txn.fuel_type}</td>
-                    <td>${txn.quantity} L</td>
-                    <td>৳ ${txn.total_price.toLocaleString()}</td>
+                    <td>${txn.quantity} ${txn.unit}</td>
+                    <td>${txn.currency} ${txn.total_price.toLocaleString()}</td>
                 `;
                 document.getElementById("transactions").appendChild(row);
             });
@@ -90,8 +90,8 @@
             // Update stats
             const stats = data.stats;
             document.getElementById("total_transactions").textContent = stats.total_transactions;
-            document.getElementById("total_revenue").textContent = "৳ " + stats.total_revenue.toLocaleString();
-            document.getElementById("total_fuel").textContent = stats.total_fuel_dispensed + " L";
+            document.getElementById("total_revenue").textContent = stats.total_revenue.toLocaleString();
+            document.getElementById("total_fuel").textContent = stats.total_fuel_dispensed;
 
             // Add row to table
             const txn = data.transaction;
@@ -102,8 +102,8 @@
                 <td>${txn.vehicle_id}</td>
                 <td>${txn.pump_id}</td>
                 <td>${txn.fuel_type}</td>
-                <td>${txn.quantity} L</td>
-                <td>৳ ${txn.total_price.toLocaleString()}</td>
+                <td>${txn.quantity} ${txn.unit}</td>
+                <td>${txn.currency} ${txn.total_price.toLocaleString()}</td>
             `;
             document.getElementById("transactions").prepend(row);
         });

@@ -11,13 +11,12 @@ class TransactionModel:
         return mongo.db[TransactionModel.COLLECTION]
 
     @staticmethod
-    def create(vehicle_id: str, pump_id: str, fuel_price_id: str, fuel_type: str, quantity: float, total_price: float) -> dict:
+    def create(vehicle_id: str, pump_id: str, fuel_price_id: str, quantity: float, total_price: float) -> dict:
         transaction = {
             "_id": str(uuid.uuid4()),
             "vehicle_id": vehicle_id,
             "pump_id": pump_id,
             "fuel_price_id": fuel_price_id,
-            "fuel_type": fuel_type,
             "quantity": quantity,
             "total_price": total_price,
             "created_at": datetime.now(timezone.utc)

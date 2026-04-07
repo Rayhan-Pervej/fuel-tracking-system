@@ -11,12 +11,13 @@ class FuelPriceModel:
         return mongo.db[FuelPriceModel.COLLECTION]
 
     @staticmethod
-    def create(fuel_type: str, price_per_unit: float, unit: str, effective_from: str) -> dict:
+    def create(fuel_type: str, price_per_unit: float, unit: str, currency: str, effective_from: str) -> dict:
         fuel_price = {
             "_id": str(uuid.uuid4()),
             "fuel_type": fuel_type,
             "price_per_unit": price_per_unit,
             "unit": unit,
+            "currency": currency,
             "effective_from": effective_from,
             "created_at": datetime.now(timezone.utc)
         }

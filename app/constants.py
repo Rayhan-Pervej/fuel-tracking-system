@@ -2,6 +2,8 @@ import math
 
 
 FUEL_TYPES = ["octane", "diesel", "petrol"]
+CURRENCIES = ["BDT", "USD", "EUR", "GBP"]
+UNITS = ["liter", "gallon"]
 
 
 def get_pagination_params(request):

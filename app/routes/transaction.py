@@ -34,7 +34,6 @@ def create_transaction():
         vehicle_id=data["vehicle_id"],
         pump_id=data["pump_id"],
         fuel_price_id=fuel_price["_id"],
-        fuel_type=data["fuel_type"],
         quantity=data["quantity"],
         total_price=round(total_price, 2)
     )
