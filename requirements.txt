@@ -1,0 +1,11 @@
+flask
+flask-socketio
+flask-pymongo
+marshmallow
+pymongo
+python-dotenv
+gevent
+gevent-websocket
+pymongo-migrate
+flask-cors
+
