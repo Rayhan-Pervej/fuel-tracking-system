@@ -1,0 +1,93 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Fuel Tracking Dashboard</title>
+    <script src="https://cdn.socket.io/4.7.2/socket.io.min.js"></script>
+    <style>
+        body { font-family: monospace; background: #111; color: #eee; padding: 20px; }
+        h1 { color: #4fc3f7; }
+        .stats { display: flex; gap: 20px; margin: 20px 0; }
+        .card { background: #1e1e1e; border: 1px solid #333; padding: 20px; border-radius: 8px; min-width: 160px; }
+        .card h3 { margin: 0 0 8px; color: #aaa; font-size: 12px; text-transform: uppercase; }
+        .card p { margin: 0; font-size: 28px; color: #4fc3f7; }
+        table { width: 100%; border-collapse: collapse; margin-top: 20px; }
+        th { text-align: left; padding: 10px; background: #1e1e1e; color: #aaa; font-size: 12px; text-transform: uppercase; }
+        td { padding: 10px; border-bottom: 1px solid #222; font-size: 14px; }
+        tr:hover td { background: #1a1a1a; }
+        #status { font-size: 12px; color: #666; margin-bottom: 20px; }
+        #status.connected { color: #66bb6a; }
+    </style>
+</head>
+<body>
+    <h1>Fuel Tracking Dashboard</h1>
+    <p id="status">Connecting...</p>
+
+    <div class="stats">
+        <div class="card">
+            <h3>Total Transactions</h3>
+            <p id="total_transactions">—</p>
+        </div>
+        <div class="card">
+            <h3>Total Revenue</h3>
+            <p id="total_revenue">—</p>
+        </div>
+        <div class="card">
+            <h3>Fuel Dispensed</h3>
+            <p id="total_fuel">—</p>
+        </div>
+    </div>
+
+    <h2>Live Transactions</h2>
+    <table>
+        <thead>
+            <tr>
+                <th>Time</th>
+                <th>Vehicle</th>
+                <th>Pump</th>
+                <th>Fuel Type</th>
+                <th>Quantity</th>
+                <th>Total Price</th>
+            </tr>
+        </thead>
+        <tbody id="transactions"></tbody>
+    </table>
+
+    <script>
+        const socket = io("http://localhost:5000", { path: "/socket.io", transports: ["websocket"] });
+        const ns = io("http://localhost:5000/dashboard", { transports: ["websocket"] });
+
+        ns.on("connect", () => {
+            document.getElementById("status").textContent = "Connected";
+            document.getElementById("status").className = "connected";
+        });
+
+        ns.on("disconnect", () => {
+            document.getElementById("status").textContent = "Disconnected";
+            document.getElementById("status").className = "";
+        });
+
+        ns.on("new_transaction", (data) => {
+            // Update stats
+            const stats = data.stats;
+            document.getElementById("total_transactions").textContent = stats.total_transactions;
+            document.getElementById("total_revenue").textContent = "৳ " + stats.total_revenue.toLocaleString();
+            document.getElementById("total_fuel").textContent = stats.total_fuel_dispensed + " L";
+
+            // Add row to table
+            const txn = data.transaction;
+            const row = document.createElement("tr");
+            const time = new Date().toLocaleTimeString();
+            row.innerHTML = `
+                <td>${time}</td>
+                <td>${txn.vehicle_id}</td>
+                <td>${txn.pump_id}</td>
+                <td>${txn.fuel_type}</td>
+                <td>${txn.quantity} L</td>
+                <td>৳ ${txn.total_price.toLocaleString()}</td>
+            `;
+            document.getElementById("transactions").prepend(row);
+        });
+    </script>
+</body>
+</html>

@@ -1,13 +1,14 @@
 import logging
-from flask import Flask
+from flask import Flask, render_template
 from flask_cors import CORS
 from app.config import Config
-from app.extensions import mongo, socketio
+from app.extensions import mongo, socketio, limiter
 
 logging.basicConfig(
     level=logging.INFO,
     format="%(asctime)s [%(levelname)s] %(name)s: %(message)s"
 )
+
 
 def _create_indexes():
     mongo.db["transactions"].create_index("vehicle_id")
@@ -24,6 +25,7 @@ def _create_indexes():
 def create_app():
     app = Flask(__name__)
     CORS(app)
+    limiter.init_app(app)
     app.config.from_object(Config)
     mongo.init_app(app)
     socketio.init_app(app, cors_allowed_origins="*", async_mode="gevent")
@@ -43,4 +45,8 @@ def create_app():
 
     with app.app_context():
         _create_indexes()
+
+    @app.route("/dashboard")
+    def dashboard():
+        return render_template("dashboard.html")
     return app

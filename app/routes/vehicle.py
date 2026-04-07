@@ -25,7 +25,7 @@ def create_vehicle():
     vehicle = VehicleModel.create(
         user_id=data["user_id"],
         vehicle_number=data["vehicle_number"],
-        vehicle_type=data["type"])
+        vehicle_type=data["vehicle_type"])
     return jsonify(created_response("Vehicle created successfully", {"vehicle": vehicle})), 201
 
 @vehicle_bp.route('/', methods=['GET'])

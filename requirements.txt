@@ -8,4 +8,7 @@ gevent
 gevent-websocket
 pymongo-migrate
 flask-cors
+flask-limiter
+pytest
+
 
