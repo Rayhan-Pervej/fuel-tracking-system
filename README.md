@@ -400,6 +400,7 @@ Get all vehicles (paginated).
 | `cursor` | string | No | Opaque cursor from previous response |
 | `user_id` | string | No | Filter by owner user ID |
 | `type` | string | No | Filter by vehicle type: `car`, `truck`, `bike`, `bus` |
+| `search` | string | No | Partial, case-insensitive match on `vehicle_number` |
 
 **Responses:** `200` / `400` / `401` / `403`
 
@@ -416,6 +417,22 @@ Get a single vehicle by ID.
 
 ---
 
+#### `GET /api/vehicles/search`
+Search vehicles by number across all users.
+
+**Auth required:** `admin` or `employee`
+
+**Query params:**
+
+| Param | Type | Required | Description |
+|-------|------|----------|-------------|
+| `q` | string | Yes | Partial, case-insensitive match on `vehicle_number` |
+| `limit` | int | No | Page size (default: 10, max: 100) |
+
+**Responses:** `200` / `400 Missing q` / `401` / `403`
+
+---
+
 #### `GET /api/vehicles/user/<user_id>`
 Get all vehicles for a user (paginated).
 
@@ -429,6 +446,7 @@ Get all vehicles for a user (paginated).
 |-------|------|----------|-------------|
 | `limit` | int | No | Page size (default: 10, max: 100) |
 | `cursor` | string | No | Opaque cursor from previous response |
+| `search` | string | No | Partial, case-insensitive match on `vehicle_number` |
 
 **Responses:** `200` / `400` / `401` / `403` / `404 User not found`
 
@@ -698,6 +716,8 @@ Get all transactions (paginated).
 
 **Responses:** `200` / `400` / `401` / `403`
 
+> All transaction responses include enriched fields: `vehicle_number`, `pump_name`, `fuel_type`, `unit`, `currency`.
+
 ---
 
 #### `GET /api/transactions/<transaction_id>`
@@ -705,7 +725,9 @@ Get a single transaction by ID.
 
 **Auth required:** Any authenticated user
 
-**Responses:** `200` / `401` / `404`
+> Non-admin users can only view transactions for their own vehicles or pumps they are assigned to.
+
+**Responses:** `200` / `401` / `403` / `404`
 
 ---
 
@@ -714,6 +736,8 @@ Get all transactions for a vehicle (paginated).
 
 **Auth required:** Any authenticated user
 
+> Non-admin users can only view transactions for their own vehicles.
+
 **Query params:**
 
 | Param | Type | Required | Description |
@@ -721,7 +745,7 @@ Get all transactions for a vehicle (paginated).
 | `limit` | int | No | Page size (default: 10, max: 100) |
 | `cursor` | string | No | Opaque cursor from previous response |
 
-**Responses:** `200` / `400` / `401` / `404 Vehicle not found`
+**Responses:** `200` / `400` / `401` / `403` / `404 Vehicle not found`
 
 ---
 
@@ -737,7 +761,7 @@ Get all transactions for a pump (paginated).
 | `limit` | int | No | Page size (default: 10, max: 100) |
 | `cursor` | string | No | Opaque cursor from previous response |
 
-**Responses:** `200` / `400` / `401` / `404 Pump not found`
+**Responses:** `200` / `400` / `401` / `403` / `404 Pump not found`
 
 ---
 

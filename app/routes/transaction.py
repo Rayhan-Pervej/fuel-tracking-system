@@ -157,4 +157,5 @@ def get_transaction(transaction_id):
             pass
         else:
             return jsonify(error_response(403, "You do not have permission to view this transaction")), 403
+    TransactionService.enrich([transaction])
     return jsonify(success_response("Transaction retrieved successfully", {"transaction": transaction})), 200

@@ -49,7 +49,7 @@ def get_vehicles():
     vehicles, next_cursor, has_more = VehicleService.get_filtered(
         user_id=request.args.get("user_id"),
         vehicle_type=request.args.get("type"),
-        cursor=cursor, limit=limit
+        cursor=cursor, limit=limit, search=request.args.get("search")
     )
     return jsonify(cursor_response("Vehicles retrieved successfully", "vehicles", vehicles, next_cursor, has_more, limit)), 200
 
@@ -67,9 +67,23 @@ def get_vehicles_by_user(user_id):
         return jsonify(error_response(400, "Invalid pagination parameters")), 400
     vehicles, next_cursor, has_more = VehicleService.get_filtered(
         user_id=user_id, vehicle_type=None,
-        cursor=cursor, limit=limit
+        cursor=cursor, limit=limit, search=request.args.get("search")
     )
     return jsonify(cursor_response("Vehicles retrieved successfully", "vehicles", vehicles, next_cursor, has_more, limit)), 200
+
+@vehicle_bp.route('/search', methods=['GET'])
+@require_auth
+@require_role("admin", "employee")
+def search_vehicles():
+    q = request.args.get("q", "").strip()
+    if not q:
+        return jsonify(error_response(400, "Query param 'q' is required")), 400
+    limit = min(int(request.args.get("limit", 10)), 100)
+    vehicles, _, _ = VehicleService.get_filtered(
+        user_id=None, vehicle_type=None, cursor=None, limit=limit, search=q
+    )
+    return jsonify(success_response("Vehicles retrieved successfully", {"vehicles": vehicles})), 200
+
 
 @vehicle_bp.route('/<vehicle_id>', methods=['GET'])
 @require_auth

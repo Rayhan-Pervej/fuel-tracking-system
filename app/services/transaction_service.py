@@ -1,5 +1,8 @@
 from datetime import datetime, timezone
 from app.models.transaction import TransactionModel
+from app.models.vehicle import VehicleModel
+from app.models.pump import PumpModel
+from app.models.fuel_price import FuelPriceModel
 from app.constants import encode_cursor, decode_cursor
 
 
@@ -22,6 +25,26 @@ class TransactionService:
         return query
 
     @staticmethod
+    def enrich(transactions: list) -> list:
+        for t in transactions:
+            vehicle = VehicleModel.get_by_id(t.get("vehicle_id"))
+            t["vehicle_number"] = vehicle["vehicle_number"] if vehicle else None
+
+            pump = PumpModel.get_by_id(t.get("pump_id"))
+            t["pump_name"] = pump["name"] if pump else None
+
+            fuel_price = FuelPriceModel.get_by_id(t.get("fuel_price_id"))
+            if fuel_price:
+                t["fuel_type"] = fuel_price["fuel_type"]
+                t["unit"] = fuel_price["unit"]
+                t["currency"] = fuel_price["currency"]
+            else:
+                t["fuel_type"] = None
+                t["unit"] = None
+                t["currency"] = None
+        return transactions
+
+    @staticmethod
     def get_filtered(from_date, to_date, vehicle_id, pump_id, cursor, limit):
         query = TransactionService.build_query(from_date, to_date, vehicle_id, pump_id)
         after_dt = decode_cursor(cursor) if cursor else None
@@ -29,4 +52,4 @@ class TransactionService:
         has_more = len(rows) > limit
         items = rows[:limit]
         next_cursor = encode_cursor(items[-1]["created_at"]) if (has_more and items) else None
-        return items, next_cursor, has_more
+        return TransactionService.enrich(items), next_cursor, has_more

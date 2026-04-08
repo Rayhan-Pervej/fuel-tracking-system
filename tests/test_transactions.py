@@ -130,8 +130,14 @@ class TestCreateTransaction:
 
 class TestGetTransaction:
     def test_get_existing(self, client, admin_token):
-        txn = {**TRANSACTION_PAYLOAD, "_id": "txn-1", "total_price": 1250.0}
-        with patch("app.models.transaction.TransactionModel.get_by_id", return_value=txn):
+        txn = {**TRANSACTION_PAYLOAD, "_id": "txn-1", "total_price": 1250.0, "fuel_price_id": "fp-1"}
+        vehicle = {"_id": "veh-1", "vehicle_number": "DH-1234"}
+        pump = {"_id": "pump-1", "name": "Pump A"}
+        fuel_price = {"_id": "fp-1", "fuel_type": "octane", "unit": "liter", "currency": "BDT"}
+        with patch("app.models.transaction.TransactionModel.get_by_id", return_value=txn), \
+             patch("app.models.vehicle.VehicleModel.get_by_id", return_value=vehicle), \
+             patch("app.models.pump.PumpModel.get_by_id", return_value=pump), \
+             patch("app.models.fuel_price.FuelPriceModel.get_by_id", return_value=fuel_price):
             res = client.get("/api/transactions/txn-1",
                              headers={"Authorization": f"Bearer {admin_token}"})
         assert res.status_code == 200
