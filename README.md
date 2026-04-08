@@ -103,6 +103,8 @@ Obtain tokens via `POST /api/auth/login`. Access tokens expire after 15 minutes.
 | password_hash | string | Hashed password (never returned in responses) |
 | role | string | `admin`, `employee`, `customer` |
 | license | string | License number |
+| refresh_token | string | Active refresh token (never returned in responses) |
+| refresh_token_expires_at | datetime | Refresh token expiry (never returned in responses) |
 | created_at | datetime | Creation timestamp |
 
 ### Vehicle
