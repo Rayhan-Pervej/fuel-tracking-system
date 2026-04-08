@@ -3,23 +3,28 @@ from marshmallow import ValidationError
 from app.models.user import UserModel
 from app.schemas.user import UserSchema
 from app.constants import get_pagination_params, success_response, created_response, paginated_response, error_response
+from app.middleware.auth import require_auth, require_role
 
 user_bp = Blueprint("user", __name__)
 schema = UserSchema()
 
 @user_bp.route('/', methods=['POST'])
+@require_auth
+@require_role("admin")
 def create_user():
     try:
         data = schema.load(request.get_json() or {})
     except ValidationError as e:
         return jsonify(error_response(400, "Validation failed", errors=e.messages)), 400
-    if UserModel.exists_by_license(data['license']):
-        return jsonify(error_response(409, "User with this license already exists")), 409
+    if UserModel.exists_by_email(data['email']):
+        return jsonify(error_response(409, "User with this email already exists")), 409
     user = UserModel.create(**data)
     return jsonify(created_response("User created successfully", {"user": user})), 201
 
 
 @user_bp.route('/', methods=['GET'])
+@require_auth
+@require_role("admin")
 def get_users():
     page, limit = get_pagination_params(request)
     if page is None or limit is None:
@@ -29,6 +34,7 @@ def get_users():
     return jsonify(paginated_response("Users retrieved successfully", "users", users, page, limit, total)), 200
 
 @user_bp.route('/<user_id>', methods=['GET'])
+@require_auth
 def get_user(user_id):
     user = UserModel.get_by_id(user_id)
     if not user:

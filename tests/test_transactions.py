@@ -14,7 +14,7 @@ TRANSACTION_PAYLOAD = {
 
 
 class TestCreateTransaction:
-    def test_success(self, client):
+    def test_success(self, client, admin_token):
         created = {
             "_id": "txn-1",
             "vehicle_id": "veh-1",
@@ -28,47 +28,81 @@ class TestCreateTransaction:
              patch("app.models.pump.PumpModel.get_by_id", return_value=PUMP), \
              patch("app.models.fuel_price.FuelPriceModel.get_latest", return_value=FUEL_PRICE), \
              patch("app.models.transaction.TransactionModel.create", return_value=created):
-            res = client.post("/api/transactions/", json=TRANSACTION_PAYLOAD)
+            res = client.post("/api/transactions/", json=TRANSACTION_PAYLOAD,
+                              headers={"Authorization": f"Bearer {admin_token}"})
         assert res.status_code == 201
         body = res.get_json()
         assert body["status"] == 201
         assert body["data"]["transaction"]["total_price"] == 1250.0
 
-    def test_vehicle_not_found(self, client):
+    def test_success_as_employee(self, client, employee_token):
+        created = {
+            "_id": "txn-1",
+            "vehicle_id": "veh-1",
+            "pump_id": "pump-1",
+            "fuel_price_id": "fp-1",
+            "quantity": 10.0,
+            "total_price": 1250.0,
+            "created_at": "2025-01-01"
+        }
+        with patch("app.models.vehicle.VehicleModel.get_by_id", return_value=VEHICLE), \
+             patch("app.models.pump.PumpModel.get_by_id", return_value=PUMP), \
+             patch("app.models.fuel_price.FuelPriceModel.get_latest", return_value=FUEL_PRICE), \
+             patch("app.models.transaction.TransactionModel.create", return_value=created):
+            res = client.post("/api/transactions/", json=TRANSACTION_PAYLOAD,
+                              headers={"Authorization": f"Bearer {employee_token}"})
+        assert res.status_code == 201
+
+    def test_no_token(self, client):
+        res = client.post("/api/transactions/", json=TRANSACTION_PAYLOAD)
+        assert res.status_code == 401
+
+    def test_forbidden_customer(self, client, customer_token):
+        res = client.post("/api/transactions/", json=TRANSACTION_PAYLOAD,
+                          headers={"Authorization": f"Bearer {customer_token}"})
+        assert res.status_code == 403
+
+    def test_vehicle_not_found(self, client, admin_token):
         with patch("app.models.vehicle.VehicleModel.get_by_id", return_value=None):
-            res = client.post("/api/transactions/", json=TRANSACTION_PAYLOAD)
+            res = client.post("/api/transactions/", json=TRANSACTION_PAYLOAD,
+                              headers={"Authorization": f"Bearer {admin_token}"})
         assert res.status_code == 404
         assert "Vehicle not found" in res.get_json()["message"]
 
-    def test_pump_not_found(self, client):
+    def test_pump_not_found(self, client, admin_token):
         with patch("app.models.vehicle.VehicleModel.get_by_id", return_value=VEHICLE), \
              patch("app.models.pump.PumpModel.get_by_id", return_value=None):
-            res = client.post("/api/transactions/", json=TRANSACTION_PAYLOAD)
+            res = client.post("/api/transactions/", json=TRANSACTION_PAYLOAD,
+                              headers={"Authorization": f"Bearer {admin_token}"})
         assert res.status_code == 404
         assert "Pump not found" in res.get_json()["message"]
 
-    def test_no_active_fuel_price(self, client):
+    def test_no_active_fuel_price(self, client, admin_token):
         with patch("app.models.vehicle.VehicleModel.get_by_id", return_value=VEHICLE), \
              patch("app.models.pump.PumpModel.get_by_id", return_value=PUMP), \
              patch("app.models.fuel_price.FuelPriceModel.get_latest", return_value=None):
-            res = client.post("/api/transactions/", json=TRANSACTION_PAYLOAD)
+            res = client.post("/api/transactions/", json=TRANSACTION_PAYLOAD,
+                              headers={"Authorization": f"Bearer {admin_token}"})
         assert res.status_code == 404
         assert "No active price" in res.get_json()["message"]
 
-    def test_invalid_fuel_type(self, client):
+    def test_invalid_fuel_type(self, client, admin_token):
         bad = {**TRANSACTION_PAYLOAD, "fuel_type": "kerosene"}
-        res = client.post("/api/transactions/", json=bad)
+        res = client.post("/api/transactions/", json=bad,
+                          headers={"Authorization": f"Bearer {admin_token}"})
         assert res.status_code == 400
         assert "fuel_type" in res.get_json()["errors"]
 
-    def test_quantity_too_low(self, client):
+    def test_quantity_too_low(self, client, admin_token):
         bad = {**TRANSACTION_PAYLOAD, "quantity": 0.0}
-        res = client.post("/api/transactions/", json=bad)
+        res = client.post("/api/transactions/", json=bad,
+                          headers={"Authorization": f"Bearer {admin_token}"})
         assert res.status_code == 400
         assert "quantity" in res.get_json()["errors"]
 
-    def test_missing_fields(self, client):
-        res = client.post("/api/transactions/", json={})
+    def test_missing_fields(self, client, admin_token):
+        res = client.post("/api/transactions/", json={},
+                          headers={"Authorization": f"Bearer {admin_token}"})
         assert res.status_code == 400
         errors = res.get_json()["errors"]
         assert "vehicle_id" in errors
@@ -78,48 +112,86 @@ class TestCreateTransaction:
 
 
 class TestGetTransaction:
-    def test_get_existing(self, client):
+    def test_get_existing(self, client, admin_token):
         txn = {**TRANSACTION_PAYLOAD, "_id": "txn-1", "total_price": 1250.0}
         with patch("app.models.transaction.TransactionModel.get_by_id", return_value=txn):
-            res = client.get("/api/transactions/txn-1")
+            res = client.get("/api/transactions/txn-1",
+                             headers={"Authorization": f"Bearer {admin_token}"})
         assert res.status_code == 200
         assert res.get_json()["data"]["transaction"]["_id"] == "txn-1"
 
-    def test_get_nonexistent(self, client):
+    def test_get_nonexistent(self, client, admin_token):
         with patch("app.models.transaction.TransactionModel.get_by_id", return_value=None):
-            res = client.get("/api/transactions/bad-id")
+            res = client.get("/api/transactions/bad-id",
+                             headers={"Authorization": f"Bearer {admin_token}"})
         assert res.status_code == 404
+
+    def test_no_token(self, client):
+        res = client.get("/api/transactions/txn-1")
+        assert res.status_code == 401
 
 
 class TestGetTransactionsByVehicle:
-    def test_success(self, client):
+    def test_success(self, client, admin_token):
         txns = [{"_id": "txn-1", "vehicle_id": "veh-1", "total_price": 1250.0}]
         with patch("app.models.vehicle.VehicleModel.get_by_id", return_value=VEHICLE), \
              patch("app.models.transaction.TransactionModel.get_by_vehicle", return_value=txns), \
              patch("app.models.transaction.TransactionModel.collection") as mock_col:
             mock_col.return_value.count_documents.return_value = 1
-            res = client.get("/api/transactions/vehicle/veh-1")
+            res = client.get("/api/transactions/vehicle/veh-1",
+                             headers={"Authorization": f"Bearer {admin_token}"})
         assert res.status_code == 200
         assert res.get_json()["data"]["pagination"]["total"] == 1
 
-    def test_vehicle_not_found(self, client):
+    def test_vehicle_not_found(self, client, admin_token):
         with patch("app.models.vehicle.VehicleModel.get_by_id", return_value=None):
-            res = client.get("/api/transactions/vehicle/bad-id")
+            res = client.get("/api/transactions/vehicle/bad-id",
+                             headers={"Authorization": f"Bearer {admin_token}"})
         assert res.status_code == 404
+
+    def test_no_token(self, client):
+        res = client.get("/api/transactions/vehicle/veh-1")
+        assert res.status_code == 401
 
 
 class TestGetTransactionsByPump:
-    def test_success(self, client):
+    def test_success(self, client, admin_token):
         txns = [{"_id": "txn-1", "pump_id": "pump-1", "total_price": 1250.0}]
         with patch("app.models.pump.PumpModel.get_by_id", return_value=PUMP), \
              patch("app.models.transaction.TransactionModel.get_by_pump", return_value=txns), \
              patch("app.models.transaction.TransactionModel.collection") as mock_col:
             mock_col.return_value.count_documents.return_value = 1
-            res = client.get("/api/transactions/pump/pump-1")
+            res = client.get("/api/transactions/pump/pump-1",
+                             headers={"Authorization": f"Bearer {admin_token}"})
         assert res.status_code == 200
         assert len(res.get_json()["data"]["transactions"]) == 1
 
-    def test_pump_not_found(self, client):
+    def test_pump_not_found(self, client, admin_token):
         with patch("app.models.pump.PumpModel.get_by_id", return_value=None):
-            res = client.get("/api/transactions/pump/bad-id")
+            res = client.get("/api/transactions/pump/bad-id",
+                             headers={"Authorization": f"Bearer {admin_token}"})
         assert res.status_code == 404
+
+    def test_no_token(self, client):
+        res = client.get("/api/transactions/pump/pump-1")
+        assert res.status_code == 401
+
+
+class TestGetAllTransactions:
+    def test_success(self, client, admin_token):
+        txns = [{"_id": "txn-1", "vehicle_id": "veh-1", "total_price": 1250.0}]
+        with patch("app.models.transaction.TransactionModel.get_all", return_value=txns), \
+             patch("app.models.transaction.TransactionModel.collection") as mock_col:
+            mock_col.return_value.count_documents.return_value = 1
+            res = client.get("/api/transactions/",
+                             headers={"Authorization": f"Bearer {admin_token}"})
+        assert res.status_code == 200
+
+    def test_no_token(self, client):
+        res = client.get("/api/transactions/")
+        assert res.status_code == 401
+
+    def test_forbidden_non_admin(self, client, employee_token):
+        res = client.get("/api/transactions/",
+                         headers={"Authorization": f"Bearer {employee_token}"})
+        assert res.status_code == 403

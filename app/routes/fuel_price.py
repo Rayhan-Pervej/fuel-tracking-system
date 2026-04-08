@@ -3,11 +3,14 @@ from marshmallow import ValidationError
 from app.models.fuel_price import FuelPriceModel
 from app.schemas.fuel_price import FuelPriceSchema
 from app.constants import get_pagination_params, success_response, created_response, paginated_response, error_response
+from app.middleware.auth import require_auth, require_role
 
 fuel_price_bp = Blueprint("fuel_price", __name__)
 schema = FuelPriceSchema()
 
 @fuel_price_bp.route('/', methods=['POST'])
+@require_auth
+@require_role("admin")
 def create_fuel_price():
     try:
         data = schema.load(request.get_json() or {})
@@ -19,6 +22,7 @@ def create_fuel_price():
 
 
 @fuel_price_bp.route('/latest/<fuel_type>', methods=['GET'])
+@require_auth
 def get_latest_fuel_price(fuel_type):
     fuel_price = FuelPriceModel.get_latest(fuel_type)
     if not fuel_price:
@@ -27,6 +31,7 @@ def get_latest_fuel_price(fuel_type):
 
 
 @fuel_price_bp.route('/', methods=['GET'])
+@require_auth
 def get_fuel_prices():
     page, limit = get_pagination_params(request)
     if page is None or limit is None:
@@ -37,6 +42,7 @@ def get_fuel_prices():
 
 
 @fuel_price_bp.route('/<fuel_price_id>', methods=['GET'])
+@require_auth
 def get_fuel_price(fuel_price_id):
     fuel_price = FuelPriceModel.get_by_id(fuel_price_id)
     if not fuel_price:

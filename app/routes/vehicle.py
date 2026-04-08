@@ -4,12 +4,14 @@ from app.models.vehicle import VehicleModel
 from app.models.user import UserModel
 from app.schemas.vehicle import VehicleSchema
 from app.constants import get_pagination_params, success_response, created_response, paginated_response, error_response
+from app.middleware.auth import require_auth, require_role
 
 vehicle_bp = Blueprint("vehicle", __name__)
 schema = VehicleSchema()
 
 
 @vehicle_bp.route('/', methods=['POST'])
+@require_auth
 def create_vehicle():
     try:
         data = schema.load(request.get_json() or {})
@@ -29,6 +31,8 @@ def create_vehicle():
     return jsonify(created_response("Vehicle created successfully", {"vehicle": vehicle})), 201
 
 @vehicle_bp.route('/', methods=['GET'])
+@require_auth
+@require_role("admin")
 def get_vehicles():
     page, limit = get_pagination_params(request)
     if page is None or limit is None:
@@ -38,6 +42,7 @@ def get_vehicles():
     return jsonify(paginated_response("Vehicles retrieved successfully", "vehicles", vehicles, page, limit, total)), 200
 
 @vehicle_bp.route('/user/<user_id>', methods=['GET'])
+@require_auth
 def get_vehicles_by_user(user_id):
     if not UserModel.get_by_id(user_id):
         return jsonify(error_response(404, "User not found")), 404
@@ -50,6 +55,7 @@ def get_vehicles_by_user(user_id):
     return jsonify(paginated_response("Vehicles retrieved successfully", "vehicles", vehicles, page, limit, total)), 200
 
 @vehicle_bp.route('/<vehicle_id>', methods=['GET'])
+@require_auth
 def get_vehicle(vehicle_id):
     vehicle = VehicleModel.get_by_id(vehicle_id)
     if not vehicle:

@@ -10,5 +10,6 @@ pymongo-migrate
 flask-cors
 flask-limiter
 pytest
+PyJWT
 
 

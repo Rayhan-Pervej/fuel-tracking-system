@@ -4,6 +4,8 @@ import math
 FUEL_TYPES = ["octane", "diesel", "petrol"]
 CURRENCIES = ["BDT", "USD", "EUR", "GBP"]
 UNITS = ["liter", "gallon"]
+ROLES = ["admin", "employee", "customer"]
+PUMP_EMPLOYEE_ROLES = ["pump_admin", "employee"]
 
 
 def get_pagination_params(request):

@@ -6,12 +6,15 @@ from app.models.pump import PumpModel
 from app.models.fuel_price import FuelPriceModel
 from app.schemas.transaction import TransactionSchema
 from app.constants import get_pagination_params, success_response, created_response, paginated_response, error_response
+from app.middleware.auth import require_auth, require_role
 
 transaction_bp = Blueprint("transaction", __name__)
 schema = TransactionSchema()
 
 
 @transaction_bp.route('/', methods=['POST'])
+@require_auth
+@require_role("admin", "employee")
 def create_transaction():
     try:
         data = schema.load(request.get_json() or {})
@@ -42,6 +45,8 @@ def create_transaction():
 
 
 @transaction_bp.route('/', methods=['GET'])
+@require_auth
+@require_role("admin")
 def get_transactions():
     page, limit = get_pagination_params(request)
     if page is None or limit is None:
@@ -51,6 +56,7 @@ def get_transactions():
     return jsonify(paginated_response("Transactions retrieved successfully", "transactions", transactions, page, limit, total)), 200
 
 @transaction_bp.route('/vehicle/<vehicle_id>', methods=['GET'])
+@require_auth
 def get_transactions_by_vehicle(vehicle_id):
     if not VehicleModel.get_by_id(vehicle_id):
         return jsonify(error_response(404, "Vehicle not found")), 404
@@ -63,6 +69,7 @@ def get_transactions_by_vehicle(vehicle_id):
     return jsonify(paginated_response("Transactions retrieved successfully", "transactions", transactions, page, limit, total)), 200
 
 @transaction_bp.route('/pump/<pump_id>', methods=['GET'])
+@require_auth
 def get_transactions_by_pump(pump_id):
     if not PumpModel.get_by_id(pump_id):
         return jsonify(error_response(404, "Pump not found")), 404
@@ -75,6 +82,7 @@ def get_transactions_by_pump(pump_id):
     return jsonify(paginated_response("Transactions retrieved successfully", "transactions", transactions, page, limit, total)), 200
 
 @transaction_bp.route('/<transaction_id>', methods=['GET'])
+@require_auth
 def get_transaction(transaction_id):
     transaction = TransactionModel.get_by_id(transaction_id)
     if not transaction:

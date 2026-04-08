@@ -1,5 +1,6 @@
 from flask import Blueprint, request, jsonify
 from marshmallow import ValidationError
+from app.middleware.auth import require_auth, require_role
 from app.models.pump import PumpModel
 from app.schemas.pump import PumpSchema
 from app.constants import get_pagination_params, success_response, created_response, paginated_response, error_response
@@ -9,6 +10,8 @@ schema = PumpSchema()
 
 
 @pump_bp.route('/', methods=['POST'])
+@require_auth
+@require_role("admin")
 def create_pump():
     try:
         data = schema.load(request.get_json() or {})
@@ -23,6 +26,7 @@ def create_pump():
 
 
 @pump_bp.route('/', methods=['GET'])
+@require_auth
 def get_pumps():
     page, limit = get_pagination_params(request)
     if page is None or limit is None:
@@ -33,6 +37,7 @@ def get_pumps():
 
 
 @pump_bp.route('/<pump_id>', methods=['GET'])
+@require_auth
 def get_pump(pump_id):
     pump = PumpModel.get_by_id(pump_id)
     if not pump:
