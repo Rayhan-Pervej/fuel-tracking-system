@@ -20,7 +20,7 @@ class VehicleModel:
             "_id": str(uuid.uuid4()),
             "user_id": user_id,
             "vehicle_number": vehicle_number,
-            "type": vehicle_type,
+            "vehicle_type": vehicle_type,
             "created_at": datetime.now(timezone.utc)
         }
         try:

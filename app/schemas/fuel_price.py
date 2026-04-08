@@ -12,7 +12,7 @@ def validate_date(value):
 
 class FuelPriceSchema(Schema):
     fuel_type = fields.Str(required=True, validate=validate.OneOf(FUEL_TYPES))
-    price_per_unit = fields.Decimal(required=True, validate=validate.Range(min=0.1), as_string=False)
+    price_per_unit = fields.Float(required=True, validate=validate.Range(min=0.1))
     unit = fields.Str(required=True, validate=validate.OneOf(UNITS))
     currency = fields.Str(load_default="BDT", validate=validate.OneOf(CURRENCIES))
     effective_from = fields.Str(required=True, validate=validate_date)

@@ -7,7 +7,7 @@ USER = {"_id": "user-1", "name": "Rayhan", "license": "DH-001"}
 
 class TestCreateVehicle:
     def test_success(self, client, admin_token):
-        created = {**VEHICLE, "_id": "veh-1", "type": "car", "created_at": "2025-01-01"}
+        created = {**VEHICLE, "_id": "veh-1", "created_at": "2025-01-01"}
         with patch("app.models.user.UserModel.get_by_id", return_value=USER), \
              patch("app.models.vehicle.VehicleModel.exists_by_number", return_value=False), \
              patch("app.models.vehicle.VehicleModel.create", return_value=created):
@@ -53,7 +53,7 @@ class TestCreateVehicle:
 
 class TestGetVehicle:
     def test_get_existing(self, client, admin_token):
-        vehicle = {**VEHICLE, "_id": "veh-1", "type": "car"}
+        vehicle = {**VEHICLE, "_id": "veh-1"}
         with patch("app.models.vehicle.VehicleModel.get_by_id", return_value=vehicle):
             res = client.get("/api/vehicles/veh-1",
                              headers={"Authorization": f"Bearer {admin_token}"})
@@ -73,7 +73,7 @@ class TestGetVehicle:
 
 class TestGetVehiclesByUser:
     def test_success(self, client, admin_token):
-        vehicles = [{"_id": "veh-1", "user_id": "user-1", "vehicle_number": "DH-1234", "type": "car"}]
+        vehicles = [{"_id": "veh-1", "user_id": "user-1", "vehicle_number": "DH-1234", "vehicle_type": "car"}]
         with patch("app.models.user.UserModel.get_by_id", return_value=USER), \
              patch("app.services.vehicle_service.VehicleService.get_filtered", return_value=(vehicles, None, False)):
             res = client.get("/api/vehicles/user/user-1",
@@ -94,7 +94,7 @@ class TestGetVehiclesByUser:
 
 class TestGetAllVehicles:
     def test_success(self, client, admin_token):
-        vehicles = [{"_id": "veh-1", "user_id": "user-1", "vehicle_number": "DH-1234", "type": "car"}]
+        vehicles = [{"_id": "veh-1", "user_id": "user-1", "vehicle_number": "DH-1234", "vehicle_type": "car"}]
         with patch("app.services.vehicle_service.VehicleService.get_filtered", return_value=(vehicles, None, False)):
             res = client.get("/api/vehicles/",
                              headers={"Authorization": f"Bearer {admin_token}"})
@@ -111,16 +111,16 @@ class TestGetAllVehicles:
 
 
 class TestUpdateVehicle:
-    VEHICLE_DB = {"_id": "veh-1", "user_id": "user-1", "vehicle_number": "DH-1234", "type": "car"}
+    VEHICLE_DB = {"_id": "veh-1", "user_id": "user-1", "vehicle_number": "DH-1234", "vehicle_type": "car"}
 
     def test_success_as_admin(self, client, admin_token):
-        updated = {**self.VEHICLE_DB, "type": "truck"}
+        updated = {**self.VEHICLE_DB, "vehicle_type": "truck"}
         with patch("app.models.vehicle.VehicleModel.get_by_id", return_value=self.VEHICLE_DB), \
              patch("app.models.vehicle.VehicleModel.update", return_value=updated):
             res = client.patch("/api/vehicles/veh-1", json={"vehicle_type": "truck"},
                                headers={"Authorization": f"Bearer {admin_token}"})
         assert res.status_code == 200
-        assert res.get_json()["data"]["vehicle"]["type"] == "truck"
+        assert res.get_json()["data"]["vehicle"]["vehicle_type"] == "truck"
 
     def test_not_found(self, client, admin_token):
         with patch("app.models.vehicle.VehicleModel.get_by_id", return_value=None):

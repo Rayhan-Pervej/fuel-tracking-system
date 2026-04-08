@@ -10,7 +10,7 @@ class VehicleService:
         if user_id:
             query["user_id"] = user_id
         if vehicle_type:
-            query["type"] = vehicle_type
+            query["vehicle_type"] = vehicle_type
         return query
 
     @staticmethod
