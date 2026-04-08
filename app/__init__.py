@@ -30,7 +30,7 @@ def _create_indexes():
     mongo.db["pumps"].create_index("license", unique=True)
     mongo.db["pump_employees"].create_index("pump_id")
     mongo.db["pump_employees"].create_index([("pump_id", 1), ("user_id", 1)], unique=True)
-    mongo.db["fuel_prices"].create_index([("fuel_type", 1), ("effective_from", 1)], unique=True)
+    mongo.db["fuel_prices"].create_index([("fuel_type", 1), ("effective_from", 1)], unique=True, name="fuel_type_effective_from_unique")
 
 def create_app():
     validate_config()
