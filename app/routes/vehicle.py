@@ -58,7 +58,10 @@ def get_vehicles():
 def get_vehicles_by_user(user_id):
     if not UserModel.get_by_id(user_id):
         return jsonify(error_response(404, "User not found")), 404
-
+    
+    if g.role != "admin" and g.user_id != user_id:
+        return jsonify(error_response(403, "You can only view your own vehicles")), 403
+    
     cursor, limit = get_cursor_params(request)
     if limit is None:
         return jsonify(error_response(400, "Invalid pagination parameters")), 400
@@ -99,3 +102,14 @@ def update_vehicle(vehicle_id):
 
     updated = VehicleModel.update(vehicle_id, data)
     return jsonify(success_response("Vehicle updated successfully", {"vehicle": updated})), 200
+
+@vehicle_bp.route('/<vehicle_id>', methods=['DELETE'])
+@require_auth
+def delete_vehicle(vehicle_id):
+    vehicle = VehicleModel.get_by_id(vehicle_id)
+    if not vehicle:
+        return jsonify(error_response(404, "Vehicle not found")), 404
+    if g.role != "admin" and g.user_id != vehicle["user_id"]:
+        return jsonify(error_response(403, "You can only delete your own vehicles")), 403
+    VehicleModel.delete(vehicle_id)
+    return jsonify(success_response("Vehicle deleted successfully", {})), 200

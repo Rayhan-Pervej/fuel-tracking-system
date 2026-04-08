@@ -12,6 +12,13 @@ add_schema = AddPumpEmployeeSchema()
 update_schema = UpdatePumpEmployeeRoleSchema()
 
 
+@pump_employee_bp.route('/me/pumps', methods=['GET'])
+@require_auth
+def get_my_pumps():
+    assignments = PumpEmployeeModel.get_by_user(g.user_id)
+    return jsonify(success_response("Pump assignments retrieved successfully", {"pumps": assignments})), 200
+
+
 @pump_employee_bp.route('/<pump_id>/employees', methods=['POST'])
 @require_auth
 def add_employee(pump_id):
@@ -26,18 +33,20 @@ def add_employee(pump_id):
     except ValidationError as e:
         return jsonify(error_response(400, "Validation failed", errors=e.messages)), 400
     
-    user = UserModel.get_by_id(data['user_id'])
+    user = UserModel.get_by_email(data['email'])
     if not user:
         return jsonify(error_response(404, "User not found")), 404
-    if PumpEmployeeModel.exists(pump_id, data['user_id']):
+    user_id = user['_id']
+    if PumpEmployeeModel.exists(pump_id, user_id):
         return jsonify(error_response(409, "Employee record already exists for this user")), 409
     if user['role'] != 'employee':
         return jsonify(error_response(400, "Only users with employee role can be assigned to a pump")), 400
-    
+
     if data['role'] == 'pump_admin' and PumpEmployeeModel.has_pump_admin(pump_id):
         return jsonify(error_response(400, "Pump already has an admin")), 400
-    
-    record = PumpEmployeeModel.create(pump_id=pump_id, user_id=data['user_id'], added_by=g.user_id, role=data['role'])
+
+    record = PumpEmployeeModel.create(pump_id=pump_id, user_id=user_id, added_by=g.user_id, role=data['role'])
+
     return jsonify(created_response("Employee added successfully", {"employee": record})), 201
 
 
@@ -53,7 +62,7 @@ def remove_employee(pump_id, user_id):
     if not PumpEmployeeModel.exists(pump_id, user_id):
         return jsonify(error_response(404, "Employee not found for this pump")), 404
 
-    if PumpEmployeeModel.is_pump_admin(pump_id, user_id):
+    if g.role != "admin" and PumpEmployeeModel.is_pump_admin(pump_id, user_id):
         return jsonify(error_response(400, "Cannot remove the pump admin. Reassign the role first")), 400
 
     PumpEmployeeModel.remove(pump_id, user_id)
@@ -77,7 +86,7 @@ def update_employee_role(pump_id, user_id):
     except ValidationError as e:
         return jsonify(error_response(400, "Validation failed", errors=e.messages)), 400
 
-    if data['role'] == 'pump_admin' and PumpEmployeeModel.has_pump_admin(pump_id):
+    if data['role'] == 'pump_admin' and PumpEmployeeModel.has_pump_admin(pump_id) and g.role != "admin":
         return jsonify(error_response(400, "Pump already has an admin")), 400
 
     PumpEmployeeModel.update_role(pump_id=pump_id, user_id=user_id, role=data['role'])
@@ -105,4 +114,3 @@ def get_employees(pump_id):
     employees = rows[:limit]
     next_cursor = encode_cursor(employees[-1]["created_at"]) if (has_more and employees) else None
     return jsonify(cursor_response("Employees retrieved successfully", "employees", employees, next_cursor, has_more, limit)), 200
-

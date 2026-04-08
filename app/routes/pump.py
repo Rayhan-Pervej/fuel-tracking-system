@@ -1,9 +1,10 @@
-from flask import Blueprint, request, jsonify
+from flask import Blueprint, request, jsonify, g
 from marshmallow import ValidationError
 from app.middleware.auth import require_auth, require_role
 from app.models.pump import PumpModel
 from app.schemas.pump import PumpSchema, PumpUpdateSchema
 from app.services.pump_service import PumpService
+from app.models.pump_employee import PumpEmployeeModel
 from app.constants import get_cursor_params, success_response, created_response, cursor_response, error_response
 
 pump_bp = Blueprint("pump", __name__)
@@ -75,3 +76,13 @@ def update_pump(pump_id):
     updated = PumpModel.update(pump_id, data)
     return jsonify(success_response("Pump updated successfully", {"pump": updated})), 200
 
+@pump_bp.route('/<pump_id>', methods=['DELETE'])
+@require_auth
+@require_role("admin")
+def delete_pump(pump_id):
+    pump = PumpModel.get_by_id(pump_id)
+    if not pump:
+        return jsonify(error_response(404, "Pump not found")), 404
+    PumpEmployeeModel.remove_by_pump(pump_id)
+    PumpModel.delete(pump_id)
+    return jsonify(success_response("Pump deleted successfully", {})), 200

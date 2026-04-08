@@ -77,3 +77,7 @@ class UserModel:
             {"$unset": {"refresh_token": "", "refresh_token_expires_at": ""}}
         )
 
+    @staticmethod
+    def delete(user_id: str) -> None:
+        UserModel.collection().delete_one({"_id": user_id})
+

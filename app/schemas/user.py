@@ -12,5 +12,4 @@ class UserSchema(Schema):
 class UserUpdateSchema(Schema):
     name = fields.Str(validate=validate.Length(min=2, max=100))
     license = fields.Str(validate=validate.Length(min=3, max=10))
-
-
+    role = fields.Str(validate=validate.OneOf(ROLES))

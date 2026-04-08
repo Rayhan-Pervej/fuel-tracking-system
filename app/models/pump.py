@@ -44,3 +44,8 @@ class PumpModel:
     @staticmethod
     def get_by_id(pump_id: str) -> dict:
         return PumpModel.collection().find_one({"_id": pump_id})
+    
+
+    @staticmethod
+    def delete(pump_id: str) -> None:
+        PumpModel.collection().delete_one({"_id": pump_id})

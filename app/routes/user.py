@@ -1,10 +1,12 @@
-from flask import Blueprint, request, jsonify
+from flask import Blueprint, request, jsonify, g
 from marshmallow import ValidationError
 from app.models.user import UserModel
 from app.schemas.user import UserSchema, UserUpdateSchema
 from app.services.user_service import UserService
 from app.constants import get_cursor_params, success_response, created_response, cursor_response, error_response
 from app.middleware.auth import require_auth, require_role
+from app.models.vehicle import VehicleModel
+from app.models.pump_employee import PumpEmployeeModel
 
 user_bp = Blueprint("user", __name__)
 schema = UserSchema()
@@ -46,6 +48,18 @@ def get_users():
         user.pop("refresh_token_expires_at", None)
     return jsonify(cursor_response("Users retrieved successfully", "users", users, next_cursor, has_more, limit)), 200
 
+@user_bp.route('/me', methods=['GET'])
+@require_auth
+def get_me():
+    user = UserModel.get_by_id(g.user_id)
+    if not user:
+        return jsonify(error_response(404, "User not found")), 404
+    user.pop("password_hash", None)
+    user.pop("refresh_token", None)
+    user.pop("refresh_token_expires_at", None)
+    return jsonify(success_response("User retrieved successfully", {"user": user})), 200
+
+
 @user_bp.route('/<user_id>', methods=['GET'])
 @require_auth
 def get_user(user_id):
@@ -81,3 +95,15 @@ def update_user(user_id):
     return jsonify(success_response("User updated successfully", {"user": updated})), 200
 
 
+@user_bp.route('/<user_id>', methods=['DELETE'])
+@require_auth
+@require_role("admin")
+def delete_user(user_id):
+    user = UserModel.get_by_id(user_id)
+    if not user:
+        return jsonify(error_response(404, "User not found")), 404
+
+    VehicleModel.delete_by_user(user_id)
+    PumpEmployeeModel.remove_by_user(user_id)
+    UserModel.delete(user_id)
+    return jsonify(success_response("User deleted successfully", {})), 200

@@ -59,8 +59,20 @@ class PumpEmployeeModel:
         return result.deleted_count > 0
     
     @staticmethod
+    def remove_by_user(user_id: str) -> None:
+        PumpEmployeeModel.collection().delete_many({"user_id": user_id})
+        
+    @staticmethod
+    def remove_by_pump(pump_id: str) -> None:
+        PumpEmployeeModel.collection().delete_many({"pump_id": pump_id})
+
+    @staticmethod
     def get_by_pump(pump_id: str, after_dt: datetime = None, limit: int = 10) -> list:
         query = {"pump_id": pump_id}
         if after_dt:
             query["created_at"] = {"$lt": after_dt}
         return list(PumpEmployeeModel.collection().find(query).sort("created_at", -1).limit(limit + 1))
+
+    @staticmethod
+    def get_by_user(user_id: str) -> list:
+        return list(PumpEmployeeModel.collection().find({"user_id": user_id}))

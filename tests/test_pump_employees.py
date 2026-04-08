@@ -9,24 +9,24 @@ RECORD = {"_id": "rec-1", "pump_id": "pump-1", "user_id": "user-1", "role": "emp
 class TestAddEmployee:
     def test_success_as_admin(self, client, admin_token):
         with patch("app.models.pump.PumpModel.get_by_id", return_value=PUMP), \
-             patch("app.models.user.UserModel.get_by_id", return_value=USER), \
+             patch("app.models.user.UserModel.get_by_email", return_value=USER), \
              patch("app.models.pump_employee.PumpEmployeeModel.exists", return_value=False), \
              patch("app.models.pump_employee.PumpEmployeeModel.has_pump_admin", return_value=False), \
              patch("app.models.pump_employee.PumpEmployeeModel.create", return_value=RECORD):
             res = client.post("/api/pumps/pump-1/employees",
-                              json={"user_id": "user-1", "role": "employee"},
+                              json={"email": "emp@test.com", "role": "employee"},
                               headers={"Authorization": f"Bearer {admin_token}"})
         assert res.status_code == 201
 
     def test_success_as_pump_admin(self, client, pump_admin_token):
         with patch("app.models.pump.PumpModel.get_by_id", return_value=PUMP), \
              patch("app.models.pump_employee.PumpEmployeeModel.is_pump_admin", return_value=True), \
-             patch("app.models.user.UserModel.get_by_id", return_value=USER), \
+             patch("app.models.user.UserModel.get_by_email", return_value=USER), \
              patch("app.models.pump_employee.PumpEmployeeModel.exists", return_value=False), \
              patch("app.models.pump_employee.PumpEmployeeModel.has_pump_admin", return_value=False), \
              patch("app.models.pump_employee.PumpEmployeeModel.create", return_value=RECORD):
             res = client.post("/api/pumps/pump-1/employees",
-                              json={"user_id": "user-1", "role": "employee"},
+                              json={"email": "emp@test.com", "role": "employee"},
                               headers={"Authorization": f"Bearer {pump_admin_token}"})
         assert res.status_code == 201
 
@@ -34,66 +34,66 @@ class TestAddEmployee:
         with patch("app.models.pump.PumpModel.get_by_id", return_value=PUMP), \
              patch("app.models.pump_employee.PumpEmployeeModel.is_pump_admin", return_value=False):
             res = client.post("/api/pumps/pump-1/employees",
-                              json={"user_id": "user-1", "role": "employee"},
+                              json={"email": "emp@test.com", "role": "employee"},
                               headers={"Authorization": f"Bearer {employee_token}"})
         assert res.status_code == 403
 
     def test_no_token(self, client):
-        res = client.post("/api/pumps/pump-1/employees", json={"user_id": "user-1", "role": "employee"})
+        res = client.post("/api/pumps/pump-1/employees", json={"email": "emp@test.com", "role": "employee"})
         assert res.status_code == 401
 
     def test_pump_not_found(self, client, admin_token):
         with patch("app.models.pump.PumpModel.get_by_id", return_value=None):
             res = client.post("/api/pumps/bad-pump/employees",
-                              json={"user_id": "user-1", "role": "employee"},
+                              json={"email": "emp@test.com", "role": "employee"},
                               headers={"Authorization": f"Bearer {admin_token}"})
         assert res.status_code == 404
 
     def test_user_not_found(self, client, admin_token):
         with patch("app.models.pump.PumpModel.get_by_id", return_value=PUMP), \
-             patch("app.models.user.UserModel.get_by_id", return_value=None):
+             patch("app.models.user.UserModel.get_by_email", return_value=None):
             res = client.post("/api/pumps/pump-1/employees",
-                              json={"user_id": "bad-user", "role": "employee"},
+                              json={"email": "notfound@test.com", "role": "employee"},
                               headers={"Authorization": f"Bearer {admin_token}"})
         assert res.status_code == 404
 
     def test_user_not_employee_role(self, client, admin_token):
         customer = {**USER, "role": "customer"}
         with patch("app.models.pump.PumpModel.get_by_id", return_value=PUMP), \
-             patch("app.models.user.UserModel.get_by_id", return_value=customer), \
+             patch("app.models.user.UserModel.get_by_email", return_value=customer), \
              patch("app.models.pump_employee.PumpEmployeeModel.exists", return_value=False):
             res = client.post("/api/pumps/pump-1/employees",
-                              json={"user_id": "user-1", "role": "employee"},
+                              json={"email": "emp@test.com", "role": "employee"},
                               headers={"Authorization": f"Bearer {admin_token}"})
         assert res.status_code == 400
 
     def test_already_assigned(self, client, admin_token):
         with patch("app.models.pump.PumpModel.get_by_id", return_value=PUMP), \
-             patch("app.models.user.UserModel.get_by_id", return_value=USER), \
+             patch("app.models.user.UserModel.get_by_email", return_value=USER), \
              patch("app.models.pump_employee.PumpEmployeeModel.exists", return_value=True):
             res = client.post("/api/pumps/pump-1/employees",
-                              json={"user_id": "user-1", "role": "employee"},
+                              json={"email": "emp@test.com", "role": "employee"},
                               headers={"Authorization": f"Bearer {admin_token}"})
         assert res.status_code == 409
 
     def test_pump_admin_already_exists(self, client, admin_token):
         with patch("app.models.pump.PumpModel.get_by_id", return_value=PUMP), \
-             patch("app.models.user.UserModel.get_by_id", return_value=USER), \
+             patch("app.models.user.UserModel.get_by_email", return_value=USER), \
              patch("app.models.pump_employee.PumpEmployeeModel.exists", return_value=False), \
              patch("app.models.pump_employee.PumpEmployeeModel.has_pump_admin", return_value=True):
             res = client.post("/api/pumps/pump-1/employees",
-                              json={"user_id": "user-1", "role": "pump_admin"},
+                              json={"email": "emp@test.com", "role": "pump_admin"},
                               headers={"Authorization": f"Bearer {admin_token}"})
         assert res.status_code == 400
 
     def test_invalid_role(self, client, admin_token):
         with patch("app.models.pump.PumpModel.get_by_id", return_value=PUMP):
             res = client.post("/api/pumps/pump-1/employees",
-                              json={"user_id": "user-1", "role": "admin"},
+                              json={"email": "emp@test.com", "role": "admin"},
                               headers={"Authorization": f"Bearer {admin_token}"})
         assert res.status_code == 400
 
-    def test_missing_user_id(self, client, admin_token):
+    def test_missing_email(self, client, admin_token):
         with patch("app.models.pump.PumpModel.get_by_id", return_value=PUMP):
             res = client.post("/api/pumps/pump-1/employees",
                               json={"role": "employee"},
@@ -144,12 +144,12 @@ class TestRemoveEmployee:
                                 headers={"Authorization": f"Bearer {admin_token}"})
         assert res.status_code == 404
 
-    def test_cannot_remove_pump_admin(self, client, admin_token):
+    def test_cannot_remove_pump_admin(self, client, pump_admin_token):
         with patch("app.models.pump.PumpModel.get_by_id", return_value=PUMP), \
              patch("app.models.pump_employee.PumpEmployeeModel.exists", return_value=True), \
-             patch("app.models.pump_employee.PumpEmployeeModel.is_pump_admin", return_value=True):
+             patch("app.models.pump_employee.PumpEmployeeModel.is_pump_admin", side_effect=[True, True]):
             res = client.delete("/api/pumps/pump-1/employees/user-1",
-                                headers={"Authorization": f"Bearer {admin_token}"})
+                                headers={"Authorization": f"Bearer {pump_admin_token}"})
         assert res.status_code == 400
 
 
@@ -187,13 +187,14 @@ class TestUpdateEmployeeRole:
         res = client.patch("/api/pumps/pump-1/employees/user-1", json={"role": "employee"})
         assert res.status_code == 401
 
-    def test_pump_admin_already_exists(self, client, admin_token):
+    def test_pump_admin_already_exists(self, client, pump_admin_token):
         with patch("app.models.pump.PumpModel.get_by_id", return_value=PUMP), \
+             patch("app.models.pump_employee.PumpEmployeeModel.is_pump_admin", return_value=True), \
              patch("app.models.pump_employee.PumpEmployeeModel.exists", return_value=True), \
              patch("app.models.pump_employee.PumpEmployeeModel.has_pump_admin", return_value=True):
             res = client.patch("/api/pumps/pump-1/employees/user-1",
                                json={"role": "pump_admin"},
-                               headers={"Authorization": f"Bearer {admin_token}"})
+                               headers={"Authorization": f"Bearer {pump_admin_token}"})
         assert res.status_code == 400
 
     def test_employee_not_found(self, client, admin_token):

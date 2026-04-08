@@ -4,6 +4,14 @@ from flask_cors import CORS
 from app import extensions
 from app.config import Config, validate_config
 from app.extensions import mongo, socketio, limiter
+from flask.json.provider import DefaultJSONProvider
+from datetime import datetime
+
+class CustomJSONProvider(DefaultJSONProvider):
+    def default(self, obj):
+        if isinstance(obj, datetime):
+            return obj.isoformat()
+        return super().default(obj)
 
 logging.basicConfig(
     level=logging.INFO,
@@ -22,7 +30,7 @@ def _create_indexes():
     mongo.db["pumps"].create_index("license", unique=True)
     mongo.db["pump_employees"].create_index("pump_id")
     mongo.db["pump_employees"].create_index([("pump_id", 1), ("user_id", 1)], unique=True)
-
+    mongo.db["fuel_prices"].create_index([("fuel_type", 1), ("effective_from", 1)], unique=True)
 
 def create_app():
     validate_config()
@@ -31,6 +39,8 @@ def create_app():
     limiter.init_app(app)
     app.config.from_object(Config)
     mongo.init_app(app)
+    app.json_provider_class = CustomJSONProvider
+    app.json = CustomJSONProvider(app)
     extensions.mongo_client = mongo.cx  # mongo.cx is the underlying MongoClient
     socketio.init_app(app, cors_allowed_origins="*", async_mode="gevent")
     from app.sockets.events import register_socket_events

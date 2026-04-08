@@ -274,6 +274,12 @@ Self-register as a customer.
 { "name": "John Doe", "email": "user@example.com", "password": "secret123", "license": "DH-1234" }
 ```
 
+**Validation:**
+- `name`: required, 2–100 characters
+- `email`: required, valid email format
+- `password`: required, minimum 8 characters
+- `license`: required, 3–10 characters
+
 > Role is always `customer` — admin/employee accounts must be created via `POST /api/users/`.
 
 **Responses:** `201` / `400` / `403 Cannot self-register as admin or employee` / `409 Email already exists`
@@ -291,6 +297,13 @@ Create a new user (admin or employee).
 ```json
 { "name": "John Doe", "email": "user@example.com", "password": "secret123", "role": "employee", "license": "DH-1234" }
 ```
+
+**Validation:**
+- `name`: required, 2–100 characters
+- `email`: required, valid email format
+- `password`: required, minimum 8 characters
+- `role`: optional, defaults to `customer` — one of `admin`, `employee`, `customer`
+- `license`: required, 3–10 characters
 
 **Responses:** `201` / `400` / `401` / `403` / `409 Email already exists`
 
@@ -313,6 +326,15 @@ Get all users (paginated).
 
 ---
 
+#### `GET /api/users/me`
+Get the currently authenticated user's profile.
+
+**Auth required:** Any authenticated user
+
+**Responses:** `200` / `401` / `404`
+
+---
+
 #### `GET /api/users/<user_id>`
 Get a single user by ID.
 
@@ -327,9 +349,23 @@ Update a user.
 
 **Auth required:** `admin`
 
-**Request body:** Any subset of `name`, `email`, `role`, `license`
+**Request body:** Any subset of `name`, `license`, `role`
+
+**Validation:**
+- `name`: 2–100 characters
+- `license`: 3–10 characters
+- `role`: one of `admin`, `employee`, `customer`
 
 **Responses:** `200` / `400` / `401` / `403` / `404`
+
+---
+
+#### `DELETE /api/users/<user_id>`
+Delete a user and cascade-delete their vehicles and pump assignments.
+
+**Auth required:** `admin`
+
+**Responses:** `200` / `401` / `403` / `404`
 
 ---
 
@@ -374,7 +410,9 @@ Get a single vehicle by ID.
 
 **Auth required:** Any authenticated user
 
-**Responses:** `200` / `401` / `404`
+> Non-admin users can only view their own vehicles.
+
+**Responses:** `200` / `401` / `403` / `404`
 
 ---
 
@@ -383,6 +421,8 @@ Get all vehicles for a user (paginated).
 
 **Auth required:** Any authenticated user
 
+> Non-admin users can only view vehicles for their own user ID.
+
 **Query params:**
 
 | Param | Type | Required | Description |
@@ -390,7 +430,7 @@ Get all vehicles for a user (paginated).
 | `limit` | int | No | Page size (default: 10, max: 100) |
 | `cursor` | string | No | Opaque cursor from previous response |
 
-**Responses:** `200` / `400` / `401` / `404 User not found`
+**Responses:** `200` / `400` / `401` / `403` / `404 User not found`
 
 ---
 
@@ -402,6 +442,15 @@ Update a vehicle.
 **Request body:** Any subset of `vehicle_number`, `vehicle_type`
 
 **Responses:** `200` / `400` / `401` / `403` / `404`
+
+---
+
+#### `DELETE /api/vehicles/<vehicle_id>`
+Delete a vehicle.
+
+**Auth required:** Any authenticated user (admin or the vehicle's owner)
+
+**Responses:** `200` / `401` / `403` / `404`
 
 ---
 
@@ -458,7 +507,25 @@ Update a pump.
 
 ---
 
+#### `DELETE /api/pumps/<pump_id>`
+Delete a pump and cascade-delete all its employee assignments.
+
+**Auth required:** `admin`
+
+**Responses:** `200` / `401` / `403` / `404`
+
+---
+
 ### Pump Employees
+
+#### `GET /api/pumps/me/pumps`
+Get all pump assignments for the currently authenticated user.
+
+**Auth required:** Any authenticated user
+
+**Responses:** `200` / `401`
+
+---
 
 #### `POST /api/pumps/<pump_id>/employees`
 Add an employee to a pump.
@@ -467,7 +534,7 @@ Add an employee to a pump.
 
 **Request body:**
 ```json
-{ "user_id": "...", "role": "employee" }
+{ "email": "employee@example.com", "role": "employee" }
 ```
 
 > `role` must be `pump_admin` or `employee`. Only one `pump_admin` allowed per pump.
@@ -505,7 +572,7 @@ Update an employee's pump-scoped role.
 #### `GET /api/pumps/<pump_id>/employees`
 List all employees of a pump (paginated).
 
-**Auth required:** Any authenticated user
+**Auth required:** Global `admin` OR any employee assigned to this pump
 
 **Query params:**
 
@@ -536,7 +603,12 @@ Create a new fuel price entry.
 }
 ```
 
-> `currency` is optional — defaults to `BDT`.
+**Validation:**
+- `fuel_type`: required, one of `octane`, `diesel`, `petrol`
+- `price_per_unit`: required, minimum `0.1`
+- `unit`: required, one of `liter`, `gallon`
+- `currency`: optional, one of `BDT`, `USD`, `EUR`, `GBP` — defaults to `BDT`
+- `effective_from`: required, format `YYYY-MM-DD`
 
 **Responses:** `201` / `400` / `401` / `403`
 
@@ -596,6 +668,12 @@ Record a fuel transaction.
 }
 ```
 
+**Validation:**
+- `vehicle_id`: required
+- `pump_id`: required
+- `fuel_type`: required, one of `octane`, `diesel`, `petrol`
+- `quantity`: required, minimum `0.1`
+
 > `total_price` is calculated automatically: `quantity × latest price_per_unit`. Uses a MongoDB transaction for atomicity.
 
 **Responses:** `201` / `400` / `401` / `403` / `404 Vehicle/Pump/FuelPrice not found`
@@ -650,7 +728,7 @@ Get all transactions for a vehicle (paginated).
 #### `GET /api/transactions/pump/<pump_id>`
 Get all transactions for a pump (paginated).
 
-**Auth required:** Any authenticated user
+**Auth required:** Global `admin` OR any employee assigned to this pump
 
 **Query params:**
 
@@ -665,22 +743,48 @@ Get all transactions for a pump (paginated).
 
 ## Real-time (Socket.IO)
 
-Connect to namespace `/dashboard`.
+Connect to namespace `/dashboard`. A valid access token **must** be passed in the `auth` object on connect, otherwise the connection will be rejected.
+
+```javascript
+const socket = io('http://localhost:5000/dashboard', {
+  auth: { token: '<access_token>' }
+});
+```
 
 ### Events received from server
 
 | Event | Payload | Description |
 |-------|---------|-------------|
-| `init` | `{ stats, transactions[] }` | Sent on connect — initial dashboard data |
-| `new_transaction` | transaction object | Broadcast when a new transaction is created |
-| `stats_update` | stats object | Broadcast when dashboard stats change |
+| `init` | `{ stats, transactions[] }` | Sent on connect — last 20 transactions + current stats |
+| `new_transaction` | `{ transaction, stats }` | Broadcast when a new transaction is created |
 
 ### Stats object
 ```json
 {
   "total_transactions": 120,
-  "total_fuel": 1500.5,
+  "total_fuel_dispensed": 1500.5,
   "total_revenue": 187562.5
+}
+```
+
+### Transaction object (enriched)
+
+Transactions in both `init` and `new_transaction` events are enriched server-side:
+
+```json
+{
+  "_id": "...",
+  "vehicle_id": "...",
+  "pump_id": "...",
+  "fuel_price_id": "...",
+  "quantity": 10.0,
+  "total_price": 1250.0,
+  "created_at": "2025-01-01T00:00:00",
+  "fuel_type": "octane",
+  "unit": "liter",
+  "currency": "BDT",
+  "vehicle_number": "DH-1234",
+  "pump_name": "Shell Dhaka"
 }
 ```
 
@@ -696,6 +800,7 @@ Connect to namespace `/dashboard`.
 | pumps | license | unique |
 | pump_employees | (pump_id, user_id) | unique compound |
 | fuel_prices | fuel_type | index |
+| fuel_prices | (fuel_type, effective_from) | unique compound |
 | transactions | vehicle_id | index |
 | transactions | pump_id | index |
 | transactions | created_at | index |

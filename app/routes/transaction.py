@@ -32,6 +32,9 @@ def create_transaction():
     if not PumpModel.get_by_id(data['pump_id']):
         return jsonify(error_response(404, "Pump not found")), 404
 
+    if g.role != "admin" and not PumpEmployeeModel.exists(data['pump_id'], g.user_id):
+        return jsonify(error_response(403, "You are not assigned to this pump")), 403
+
     # transaction control logic is moved to service layer to ensure atomicity with MongoDB transactions
     with mongo_client.start_session() as session:
         with session.start_transaction():
@@ -95,12 +98,24 @@ def get_transactions_by_vehicle(vehicle_id):
         return jsonify(error_response(404, "Vehicle not found")), 404
     if g.role != "admin" and g.user_id != vehicle["user_id"]:
         return jsonify(error_response(403, "You can only view transactions for your own vehicles")), 403
+
+    from_date = request.args.get("from")
+    to_date = request.args.get("to")
+    if (from_date and not to_date) or (to_date and not from_date):
+        return jsonify(error_response(400, "Both 'from' and 'to' are required for date filtering")), 400
+    if from_date:
+        try:
+            datetime.strptime(from_date, "%Y-%m-%d")
+            datetime.strptime(to_date, "%Y-%m-%d")
+        except ValueError:
+            return jsonify(error_response(400, "Dates must be in YYYY-MM-DD format")), 400
+
     cursor, limit = get_cursor_params(request)
     if limit is None:
         return jsonify(error_response(400, "Invalid pagination parameters")), 400
 
     transactions, next_cursor, has_more = TransactionService.get_filtered(
-        from_date=None, to_date=None,
+        from_date=from_date, to_date=to_date,
         vehicle_id=vehicle_id, pump_id=None,
         cursor=cursor, limit=limit
     )
@@ -134,4 +149,12 @@ def get_transaction(transaction_id):
     transaction = TransactionModel.get_by_id(transaction_id)
     if not transaction:
         return jsonify(error_response(404, "Transaction not found")), 404
+    if g.role != "admin":
+        vehicle = VehicleModel.get_by_id(transaction["vehicle_id"])
+        if vehicle and g.user_id == vehicle["user_id"]:
+            pass
+        elif PumpEmployeeModel.exists(transaction["pump_id"], g.user_id):
+            pass
+        else:
+            return jsonify(error_response(403, "You do not have permission to view this transaction")), 403
     return jsonify(success_response("Transaction retrieved successfully", {"transaction": transaction})), 200
