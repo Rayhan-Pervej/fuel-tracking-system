@@ -38,8 +38,9 @@ Create a `.env` file in the root:
 
 ```env
 MONGO_URI=mongodb://localhost:27017/fuel_tracking
-SECRET_KEY=your-secret-key
-JWT_EXPIRY_DAYS=7
+SECRET_KEY=your-secret-key-at-least-32-chars
+JWT_ACCESS_EXPIRY_MINUTES=15
+JWT_REFRESH_EXPIRY_DAYS=7
 DEBUG=false
 PORT=5000
 ```
@@ -68,13 +69,13 @@ venv\Scripts\python -m pytest tests/ -v
 
 ## Authentication
 
-All protected endpoints require a JWT token in the header:
+All protected endpoints require an access token in the header:
 
 ```
-Authorization: Bearer <token>
+Authorization: Bearer <access_token>
 ```
 
-Obtain a token via `POST /api/auth/login`.
+Obtain tokens via `POST /api/auth/login`. Access tokens expire after 15 minutes. Use `POST /api/auth/refresh` with your refresh token to get a new access token. Use `POST /api/auth/logout` to invalidate the refresh token.
 
 ---
 
@@ -185,13 +186,17 @@ All responses follow this structure:
 // Created
 { "status": 201, "message": "...", "data": { ... } }
 
-// Paginated
+// Paginated (cursor-based)
 {
   "status": 200,
   "message": "...",
   "data": {
     "<key>": [...],
-    "pagination": { "page": 1, "limit": 10, "total": 50, "total_pages": 5 }
+    "pagination": {
+      "limit": 10,
+      "next_cursor": "<base64-opaque-string or null>",
+      "has_more": true
+    }
   }
 }
 
@@ -199,12 +204,14 @@ All responses follow this structure:
 { "status": 4xx, "message": "...", "errors": { ... } }
 ```
 
+> **Pagination** uses cursor-based pagination. Pass `?cursor=<next_cursor>` from the previous response to get the next page. `has_more: false` means you're on the last page.
+
 ---
 
 ### Auth
 
 #### `POST /api/auth/login`
-Login and receive a JWT token.
+Login and receive tokens.
 
 **Auth required:** No
 
@@ -213,7 +220,45 @@ Login and receive a JWT token.
 { "email": "user@example.com", "password": "secret123" }
 ```
 
-**Responses:** `200 { token }` / `400 Validation failed` / `401 Invalid credentials`
+**Response `200`:**
+```json
+{ "access_token": "...", "refresh_token": "...", "token_type": "Bearer" }
+```
+
+**Other responses:** `400 Validation failed` / `401 Invalid credentials`
+
+---
+
+#### `POST /api/auth/refresh`
+Get a new access token using a refresh token.
+
+**Auth required:** No
+
+**Request body:**
+```json
+{ "refresh_token": "..." }
+```
+
+**Response `200`:**
+```json
+{ "access_token": "...", "token_type": "Bearer" }
+```
+
+**Other responses:** `400 refresh_token required` / `401 Invalid or expired`
+
+---
+
+#### `POST /api/auth/logout`
+Invalidate the refresh token.
+
+**Auth required:** Yes (Bearer access token)
+
+**Request body:**
+```json
+{ "refresh_token": "..." }
+```
+
+**Responses:** `200` / `400` / `401`
 
 ---
 
@@ -254,9 +299,15 @@ Get all users (paginated).
 
 **Auth required:** `admin`
 
-**Query params:** `?page=1&limit=10`
+**Query params:**
 
-**Responses:** `200` / `401` / `403`
+| Param | Type | Required | Description |
+|-------|------|----------|-------------|
+| `limit` | int | No | Page size (default: 10, max: 100) |
+| `cursor` | string | No | Opaque cursor from previous response |
+| `role` | string | No | Filter by role: `admin`, `employee`, `customer` |
+
+**Responses:** `200` / `400` / `401` / `403`
 
 ---
 
@@ -269,6 +320,17 @@ Get a single user by ID.
 
 ---
 
+#### `PATCH /api/users/<user_id>`
+Update a user.
+
+**Auth required:** `admin`
+
+**Request body:** Any subset of `name`, `email`, `role`, `license`
+
+**Responses:** `200` / `400` / `401` / `403` / `404`
+
+---
+
 ### Vehicles
 
 #### `POST /api/vehicles/`
@@ -276,12 +338,14 @@ Create a new vehicle.
 
 **Auth required:** Any authenticated user
 
+> Non-admin users can only create vehicles for themselves (`user_id` must match their own ID).
+
 **Request body:**
 ```json
 { "user_id": "...", "vehicle_number": "DH-1234", "vehicle_type": "car" }
 ```
 
-**Responses:** `201` / `400` / `401` / `404 User not found` / `409 Vehicle number already exists`
+**Responses:** `201` / `400` / `401` / `403` / `404 User not found` / `409 Vehicle number already exists`
 
 ---
 
@@ -290,9 +354,16 @@ Get all vehicles (paginated).
 
 **Auth required:** `admin`
 
-**Query params:** `?page=1&limit=10`
+**Query params:**
 
-**Responses:** `200` / `401` / `403`
+| Param | Type | Required | Description |
+|-------|------|----------|-------------|
+| `limit` | int | No | Page size (default: 10, max: 100) |
+| `cursor` | string | No | Opaque cursor from previous response |
+| `user_id` | string | No | Filter by owner user ID |
+| `type` | string | No | Filter by vehicle type: `car`, `truck`, `bike`, `bus` |
+
+**Responses:** `200` / `400` / `401` / `403`
 
 ---
 
@@ -310,7 +381,25 @@ Get all vehicles for a user (paginated).
 
 **Auth required:** Any authenticated user
 
-**Responses:** `200` / `401` / `404 User not found`
+**Query params:**
+
+| Param | Type | Required | Description |
+|-------|------|----------|-------------|
+| `limit` | int | No | Page size (default: 10, max: 100) |
+| `cursor` | string | No | Opaque cursor from previous response |
+
+**Responses:** `200` / `400` / `401` / `404 User not found`
+
+---
+
+#### `PATCH /api/vehicles/<vehicle_id>`
+Update a vehicle.
+
+**Auth required:** Any authenticated user (admin or the vehicle's owner)
+
+**Request body:** Any subset of `vehicle_number`, `vehicle_type`
+
+**Responses:** `200` / `400` / `401` / `403` / `404`
 
 ---
 
@@ -335,9 +424,15 @@ Get all pumps (paginated).
 
 **Auth required:** Any authenticated user
 
-**Query params:** `?page=1&limit=10`
+**Query params:**
 
-**Responses:** `200` / `401`
+| Param | Type | Required | Description |
+|-------|------|----------|-------------|
+| `limit` | int | No | Page size (default: 10, max: 100) |
+| `cursor` | string | No | Opaque cursor from previous response |
+| `location` | string | No | Filter by location (exact match) |
+
+**Responses:** `200` / `400` / `401`
 
 ---
 
@@ -347,6 +442,17 @@ Get a single pump by ID.
 **Auth required:** Any authenticated user
 
 **Responses:** `200` / `401` / `404`
+
+---
+
+#### `PATCH /api/pumps/<pump_id>`
+Update a pump.
+
+**Auth required:** `admin`
+
+**Request body:** Any subset of `name`, `location`, `license`
+
+**Responses:** `200` / `400` / `401` / `403` / `404` / `409 License already exists`
 
 ---
 
@@ -399,9 +505,14 @@ List all employees of a pump (paginated).
 
 **Auth required:** Any authenticated user
 
-**Query params:** `?page=1&limit=10`
+**Query params:**
 
-**Responses:** `200` / `401` / `404`
+| Param | Type | Required | Description |
+|-------|------|----------|-------------|
+| `limit` | int | No | Page size (default: 10, max: 100) |
+| `cursor` | string | No | Opaque cursor from previous response |
+
+**Responses:** `200` / `400` / `401` / `404`
 
 ---
 
@@ -434,7 +545,15 @@ Get all fuel prices (paginated).
 
 **Auth required:** Any authenticated user
 
-**Responses:** `200` / `401`
+**Query params:**
+
+| Param | Type | Required | Description |
+|-------|------|----------|-------------|
+| `limit` | int | No | Page size (default: 10, max: 100) |
+| `cursor` | string | No | Opaque cursor from previous response |
+| `fuel_type` | string | No | Filter by fuel type: `octane`, `diesel`, `petrol` |
+
+**Responses:** `200` / `400` / `401`
 
 ---
 
@@ -475,7 +594,7 @@ Record a fuel transaction.
 }
 ```
 
-> `total_price` is calculated automatically: `quantity × latest price_per_unit`
+> `total_price` is calculated automatically: `quantity × latest price_per_unit`. Uses a MongoDB transaction for atomicity.
 
 **Responses:** `201` / `400` / `401` / `403` / `404 Vehicle/Pump/FuelPrice not found`
 
@@ -486,7 +605,18 @@ Get all transactions (paginated).
 
 **Auth required:** `admin`
 
-**Responses:** `200` / `401` / `403`
+**Query params:**
+
+| Param | Type | Required | Description |
+|-------|------|----------|-------------|
+| `limit` | int | No | Page size (default: 10, max: 100) |
+| `cursor` | string | No | Opaque cursor from previous response |
+| `vehicle_id` | string | No | Filter by vehicle ID |
+| `pump_id` | string | No | Filter by pump ID |
+| `from` | string | No | Start date filter `YYYY-MM-DD` (requires `to`) |
+| `to` | string | No | End date filter `YYYY-MM-DD` (requires `from`) |
+
+**Responses:** `200` / `400` / `401` / `403`
 
 ---
 
@@ -504,7 +634,14 @@ Get all transactions for a vehicle (paginated).
 
 **Auth required:** Any authenticated user
 
-**Responses:** `200` / `401` / `404 Vehicle not found`
+**Query params:**
+
+| Param | Type | Required | Description |
+|-------|------|----------|-------------|
+| `limit` | int | No | Page size (default: 10, max: 100) |
+| `cursor` | string | No | Opaque cursor from previous response |
+
+**Responses:** `200` / `400` / `401` / `404 Vehicle not found`
 
 ---
 
@@ -513,7 +650,14 @@ Get all transactions for a pump (paginated).
 
 **Auth required:** Any authenticated user
 
-**Responses:** `200` / `401` / `404 Pump not found`
+**Query params:**
+
+| Param | Type | Required | Description |
+|-------|------|----------|-------------|
+| `limit` | int | No | Page size (default: 10, max: 100) |
+| `cursor` | string | No | Opaque cursor from previous response |
+
+**Responses:** `200` / `400` / `401` / `404 Pump not found`
 
 ---
 

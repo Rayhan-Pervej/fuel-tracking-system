@@ -1,7 +1,8 @@
 import logging
 from flask import Flask, render_template
 from flask_cors import CORS
-from app.config import Config
+from app import extensions
+from app.config import Config, validate_config
 from app.extensions import mongo, socketio, limiter
 
 logging.basicConfig(
@@ -24,11 +25,13 @@ def _create_indexes():
 
 
 def create_app():
+    validate_config()
     app = Flask(__name__)
     CORS(app)
     limiter.init_app(app)
     app.config.from_object(Config)
     mongo.init_app(app)
+    extensions.mongo_client = mongo.cx  # mongo.cx is the underlying MongoClient
     socketio.init_app(app, cors_allowed_origins="*", async_mode="gevent")
     from app.sockets.events import register_socket_events
     register_socket_events()

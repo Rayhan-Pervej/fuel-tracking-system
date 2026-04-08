@@ -59,6 +59,8 @@ class PumpEmployeeModel:
         return result.deleted_count > 0
     
     @staticmethod
-    def get_by_pump(pump_id: str, page: int = 1, limit: int = 10) -> list:
-        skip = (page - 1) * limit
-        return list(PumpEmployeeModel.collection().find({"pump_id": pump_id}).sort("created_at", -1).skip(skip).limit(limit))
+    def get_by_pump(pump_id: str, after_dt: datetime = None, limit: int = 10) -> list:
+        query = {"pump_id": pump_id}
+        if after_dt:
+            query["created_at"] = {"$lt": after_dt}
+        return list(PumpEmployeeModel.collection().find(query).sort("created_at", -1).limit(limit + 1))

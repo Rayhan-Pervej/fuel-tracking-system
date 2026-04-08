@@ -25,18 +25,20 @@ class FuelPriceModel:
         return fuel_price
 
     @staticmethod
-    def get_latest(fuel_type: str) -> dict:
+    def get_latest(fuel_type: str, session=None) -> dict:
+        today = datetime.now(timezone.utc).strftime("%Y-%m-%d")
         return FuelPriceModel.collection().find_one(
-            {"fuel_type": fuel_type},
-            sort=[("effective_from", -1)]
+            {"fuel_type": fuel_type, "effective_from": {"$lte": today}},
+            sort=[("effective_from", -1)],
+            session=session
         )
-
-    @staticmethod
-    def get_all(page: int = 1, limit: int = 10) -> list:
-        skip = (page - 1) * limit
-        return list(FuelPriceModel.collection().find().sort("created_at", -1).skip(skip).limit(limit))
     
+    @staticmethod
+    def get_page(query: dict, after_dt: datetime = None, limit: int = 10) -> list:
+        if after_dt:
+            query = {**query, "created_at": {"$lt": after_dt}}
+        return list(FuelPriceModel.collection().find(query).sort("created_at", -1).limit(limit + 1))
+
     @staticmethod
     def get_by_id(fuel_price_id: str) -> dict:
         return FuelPriceModel.collection().find_one({"_id": fuel_price_id})
-

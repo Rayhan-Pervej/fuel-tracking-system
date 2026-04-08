@@ -1,6 +1,7 @@
 from app.extensions import mongo
 from datetime import datetime, timezone
 import uuid
+from pymongo.errors import DuplicateKeyError
 
 
 class VehicleModel:
@@ -22,19 +23,22 @@ class VehicleModel:
             "type": vehicle_type,
             "created_at": datetime.now(timezone.utc)
         }
-        VehicleModel.collection().insert_one(vehicle)
+        try:
+            VehicleModel.collection().insert_one(vehicle)
+        except DuplicateKeyError:
+            raise ValueError("Vehicle with this number already exists")
         return vehicle
-    
     @staticmethod
-    def get_all(page: int = 1, limit: int = 10) -> list:
-        skip = (page - 1) * limit
-        return list(VehicleModel.collection().find().sort("created_at", -1).skip(skip).limit(limit))
-    
+    def update(vehicle_id: str, data: dict) -> dict:
+        VehicleModel.collection().update_one({"_id": vehicle_id}, {"$set": data})
+        return VehicleModel.get_by_id(vehicle_id)
+
+    @staticmethod
+    def get_page(query: dict, after_dt: datetime = None, limit: int = 10) -> list:
+        if after_dt:
+            query = {**query, "created_at": {"$lt": after_dt}}
+        return list(VehicleModel.collection().find(query).sort("created_at", -1).limit(limit + 1))
+
     @staticmethod
     def get_by_id(vehicle_id: str) -> dict:
         return VehicleModel.collection().find_one({"_id": vehicle_id})
-    
-    @staticmethod
-    def get_by_user_id(user_id: str, page: int = 1, limit: int = 10) -> list:
-        skip = (page - 1) * limit
-        return list(VehicleModel.collection().find({"user_id": user_id}).sort("created_at", -1).skip(skip).limit(limit))

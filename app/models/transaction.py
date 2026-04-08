@@ -11,7 +11,7 @@ class TransactionModel:
         return mongo.db[TransactionModel.COLLECTION]
 
     @staticmethod
-    def create(vehicle_id: str, pump_id: str, fuel_price_id: str, quantity: float, total_price: float) -> dict:
+    def create(vehicle_id: str, pump_id: str, fuel_price_id: str, quantity: float, total_price: float, session=None) -> dict:
         transaction = {
             "_id": str(uuid.uuid4()),
             "vehicle_id": vehicle_id,
@@ -21,24 +21,15 @@ class TransactionModel:
             "total_price": total_price,
             "created_at": datetime.now(timezone.utc)
         }
-        TransactionModel.collection().insert_one(transaction)
+        TransactionModel.collection().insert_one(transaction, session=session)
         return transaction
-
-    @staticmethod
-    def get_all(page: int = 1, limit: int = 10) -> list:
-        skip = (page - 1) * limit
-        return list(TransactionModel.collection().find().sort("created_at", -1).skip(skip).limit(limit))
 
     @staticmethod
     def get_by_id(transaction_id: str) -> dict:
         return TransactionModel.collection().find_one({"_id": transaction_id})
 
     @staticmethod
-    def get_by_vehicle(vehicle_id: str, page: int = 1, limit: int = 10) -> list:
-        skip = (page - 1) * limit
-        return list(TransactionModel.collection().find({"vehicle_id": vehicle_id}).sort("created_at", -1).skip(skip).limit(limit))
-
-    @staticmethod
-    def get_by_pump(pump_id: str, page: int = 1, limit: int = 10) -> list:
-        skip = (page - 1) * limit
-        return list(TransactionModel.collection().find({"pump_id": pump_id}).sort("created_at", -1).skip(skip).limit(limit))
+    def get_page(query: dict, after_dt: datetime = None, limit: int = 10) -> list:
+        if after_dt:
+            query = {**query, "created_at": {"$lt": after_dt}}
+        return list(TransactionModel.collection().find(query).sort("created_at", -1).limit(limit + 1))

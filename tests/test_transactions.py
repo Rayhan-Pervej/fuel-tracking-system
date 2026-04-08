@@ -1,4 +1,18 @@
-from unittest.mock import patch
+from unittest.mock import patch, MagicMock
+
+
+def mock_session():
+    """Returns a mock mongo_client that supports start_session() context manager."""
+    session = MagicMock()
+    session.__enter__ = MagicMock(return_value=session)
+    session.__exit__ = MagicMock(return_value=False)
+    txn = MagicMock()
+    txn.__enter__ = MagicMock(return_value=txn)
+    txn.__exit__ = MagicMock(return_value=False)
+    session.start_transaction = MagicMock(return_value=txn)
+    client = MagicMock()
+    client.start_session = MagicMock(return_value=session)
+    return client
 
 
 VEHICLE = {"_id": "veh-1", "vehicle_number": "DH-1234", "type": "car"}
@@ -27,7 +41,8 @@ class TestCreateTransaction:
         with patch("app.models.vehicle.VehicleModel.get_by_id", return_value=VEHICLE), \
              patch("app.models.pump.PumpModel.get_by_id", return_value=PUMP), \
              patch("app.models.fuel_price.FuelPriceModel.get_latest", return_value=FUEL_PRICE), \
-             patch("app.models.transaction.TransactionModel.create", return_value=created):
+             patch("app.models.transaction.TransactionModel.create", return_value=created), \
+             patch("app.routes.transaction.mongo_client", mock_session()):
             res = client.post("/api/transactions/", json=TRANSACTION_PAYLOAD,
                               headers={"Authorization": f"Bearer {admin_token}"})
         assert res.status_code == 201
@@ -48,7 +63,8 @@ class TestCreateTransaction:
         with patch("app.models.vehicle.VehicleModel.get_by_id", return_value=VEHICLE), \
              patch("app.models.pump.PumpModel.get_by_id", return_value=PUMP), \
              patch("app.models.fuel_price.FuelPriceModel.get_latest", return_value=FUEL_PRICE), \
-             patch("app.models.transaction.TransactionModel.create", return_value=created):
+             patch("app.models.transaction.TransactionModel.create", return_value=created), \
+             patch("app.routes.transaction.mongo_client", mock_session()):
             res = client.post("/api/transactions/", json=TRANSACTION_PAYLOAD,
                               headers={"Authorization": f"Bearer {employee_token}"})
         assert res.status_code == 201
@@ -80,7 +96,8 @@ class TestCreateTransaction:
     def test_no_active_fuel_price(self, client, admin_token):
         with patch("app.models.vehicle.VehicleModel.get_by_id", return_value=VEHICLE), \
              patch("app.models.pump.PumpModel.get_by_id", return_value=PUMP), \
-             patch("app.models.fuel_price.FuelPriceModel.get_latest", return_value=None):
+             patch("app.models.fuel_price.FuelPriceModel.get_latest", return_value=None), \
+             patch("app.routes.transaction.mongo_client", mock_session()):
             res = client.post("/api/transactions/", json=TRANSACTION_PAYLOAD,
                               headers={"Authorization": f"Bearer {admin_token}"})
         assert res.status_code == 404
@@ -135,13 +152,11 @@ class TestGetTransactionsByVehicle:
     def test_success(self, client, admin_token):
         txns = [{"_id": "txn-1", "vehicle_id": "veh-1", "total_price": 1250.0}]
         with patch("app.models.vehicle.VehicleModel.get_by_id", return_value=VEHICLE), \
-             patch("app.models.transaction.TransactionModel.get_by_vehicle", return_value=txns), \
-             patch("app.models.transaction.TransactionModel.collection") as mock_col:
-            mock_col.return_value.count_documents.return_value = 1
+             patch("app.services.transaction_service.TransactionService.get_filtered", return_value=(txns, None, False)):
             res = client.get("/api/transactions/vehicle/veh-1",
                              headers={"Authorization": f"Bearer {admin_token}"})
         assert res.status_code == 200
-        assert res.get_json()["data"]["pagination"]["total"] == 1
+        assert res.get_json()["data"]["pagination"]["has_more"] is False
 
     def test_vehicle_not_found(self, client, admin_token):
         with patch("app.models.vehicle.VehicleModel.get_by_id", return_value=None):
@@ -158,9 +173,7 @@ class TestGetTransactionsByPump:
     def test_success(self, client, admin_token):
         txns = [{"_id": "txn-1", "pump_id": "pump-1", "total_price": 1250.0}]
         with patch("app.models.pump.PumpModel.get_by_id", return_value=PUMP), \
-             patch("app.models.transaction.TransactionModel.get_by_pump", return_value=txns), \
-             patch("app.models.transaction.TransactionModel.collection") as mock_col:
-            mock_col.return_value.count_documents.return_value = 1
+             patch("app.services.transaction_service.TransactionService.get_filtered", return_value=(txns, None, False)):
             res = client.get("/api/transactions/pump/pump-1",
                              headers={"Authorization": f"Bearer {admin_token}"})
         assert res.status_code == 200
@@ -180,9 +193,7 @@ class TestGetTransactionsByPump:
 class TestGetAllTransactions:
     def test_success(self, client, admin_token):
         txns = [{"_id": "txn-1", "vehicle_id": "veh-1", "total_price": 1250.0}]
-        with patch("app.models.transaction.TransactionModel.get_all", return_value=txns), \
-             patch("app.models.transaction.TransactionModel.collection") as mock_col:
-            mock_col.return_value.count_documents.return_value = 1
+        with patch("app.services.transaction_service.TransactionService.get_filtered", return_value=(txns, None, False)):
             res = client.get("/api/transactions/",
                              headers={"Authorization": f"Bearer {admin_token}"})
         assert res.status_code == 200

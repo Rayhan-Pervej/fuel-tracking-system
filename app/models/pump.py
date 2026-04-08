@@ -1,6 +1,7 @@
 from app.extensions import mongo
 from datetime import datetime, timezone
 import uuid
+from pymongo.errors import DuplicateKeyError
 
 
 class PumpModel:
@@ -24,14 +25,22 @@ class PumpModel:
             "license": license,
             "created_at": datetime.now(timezone.utc)
         }
-        PumpModel.collection().insert_one(pump)
+        try:
+            PumpModel.collection().insert_one(pump)
+        except DuplicateKeyError:
+            raise ValueError("Pump with this license already exists")
         return pump
+    @staticmethod
+    def update(pump_id: str, data: dict) -> dict:
+        PumpModel.collection().update_one({"_id": pump_id}, {"$set": data})
+        return PumpModel.get_by_id(pump_id)
     
     @staticmethod
-    def get_all(page: int = 1, limit: int = 10) -> list:
-        skip = (page - 1) * limit
-        return list(PumpModel.collection().find().sort("created_at", -1).skip(skip).limit(limit))
-    
+    def get_page(query: dict, after_dt: datetime = None, limit: int = 10) -> list:
+        if after_dt:
+            query = {**query, "created_at": {"$lt": after_dt}}
+        return list(PumpModel.collection().find(query).sort("created_at", -1).limit(limit + 1))
+
     @staticmethod
     def get_by_id(pump_id: str) -> dict:
         return PumpModel.collection().find_one({"_id": pump_id})

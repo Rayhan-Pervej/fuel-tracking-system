@@ -1,8 +1,9 @@
 import logging
 import time
-from flask_socketio import emit
+from flask_socketio import emit, disconnect
 from app.extensions import mongo, socketio
-
+from flask import current_app
+import jwt
 logger = logging.getLogger(__name__)
 
 
@@ -66,6 +67,16 @@ def enrich_transactions(transactions):
 
 @socketio.on("connect", namespace="/dashboard")
 def on_connect(auth=None):
+    token = (auth or {}).get("token", "")
+    if not token:
+        disconnect()
+        return
+    try:
+        jwt.decode(token, current_app.config["JWT_SECRET_KEY"], algorithms=["HS256"])
+    except jwt.InvalidTokenError:
+        disconnect()
+        return
+
     logger.info("Dashboard client connected")
     stats = get_dashboard_stats()
     recent = list(mongo.db["transactions"].find().sort("created_at", -1).limit(20))

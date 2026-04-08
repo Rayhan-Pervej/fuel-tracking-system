@@ -131,18 +131,16 @@ class TestGetUser:
 
 
 class TestGetUsers:
-    def test_pagination_defaults(self, client, admin_token):
+    def test_success(self, client, admin_token):
         users = [{"_id": f"uuid-{i}", "name": f"User{i}", "email": f"u{i}@x.com", "role": "customer"} for i in range(3)]
-        with patch("app.models.user.UserModel.get_all", return_value=users), \
-             patch("app.models.user.UserModel.collection") as mock_col:
-            mock_col.return_value.count_documents.return_value = 3
+        with patch("app.services.user_service.UserService.get_filtered", return_value=(users, None, False)):
             res = client.get("/api/users/",
                              headers={"Authorization": f"Bearer {admin_token}"})
         assert res.status_code == 200
         body = res.get_json()
         assert len(body["data"]["users"]) == 3
-        assert body["data"]["pagination"]["total"] == 3
-        assert body["data"]["pagination"]["page"] == 1
+        assert body["data"]["pagination"]["has_more"] is False
+        assert body["data"]["pagination"]["next_cursor"] is None
 
     def test_no_token(self, client):
         res = client.get("/api/users/")
@@ -153,12 +151,56 @@ class TestGetUsers:
                          headers={"Authorization": f"Bearer {employee_token}"})
         assert res.status_code == 403
 
-    def test_invalid_page_param(self, client, admin_token):
-        res = client.get("/api/users/?page=abc",
+    def test_invalid_limit_param(self, client, admin_token):
+        res = client.get("/api/users/?limit=abc",
                          headers={"Authorization": f"Bearer {admin_token}"})
         assert res.status_code == 400
 
-    def test_invalid_negative_page(self, client, admin_token):
-        res = client.get("/api/users/?page=-1",
+    def test_invalid_negative_limit(self, client, admin_token):
+        res = client.get("/api/users/?limit=-1",
                          headers={"Authorization": f"Bearer {admin_token}"})
         assert res.status_code == 400
+
+
+class TestUpdateUser:
+    USER_DB = {"_id": "uuid-1", "name": "Rayhan", "email": "rayhan@example.com",
+               "role": "customer", "license": "DH-1234"}
+
+    def test_success(self, client, admin_token):
+        updated = {**self.USER_DB, "name": "Updated Name"}
+        with patch("app.models.user.UserModel.get_by_id", return_value=self.USER_DB), \
+             patch("app.models.user.UserModel.update", return_value=updated):
+            res = client.patch("/api/users/uuid-1", json={"name": "Updated Name"},
+                               headers={"Authorization": f"Bearer {admin_token}"})
+        assert res.status_code == 200
+        assert res.get_json()["data"]["user"]["name"] == "Updated Name"
+
+    def test_not_found(self, client, admin_token):
+        with patch("app.models.user.UserModel.get_by_id", return_value=None):
+            res = client.patch("/api/users/bad-id", json={"name": "Valid Name"},
+                               headers={"Authorization": f"Bearer {admin_token}"})
+        assert res.status_code == 404
+
+    def test_no_token(self, client):
+        res = client.patch("/api/users/uuid-1", json={"name": "X"})
+        assert res.status_code == 401
+
+    def test_forbidden_non_admin(self, client, employee_token):
+        res = client.patch("/api/users/uuid-1", json={"name": "X"},
+                           headers={"Authorization": f"Bearer {employee_token}"})
+        assert res.status_code == 403
+
+    def test_empty_body(self, client, admin_token):
+        with patch("app.models.user.UserModel.get_by_id", return_value=self.USER_DB):
+            res = client.patch("/api/users/uuid-1", json={},
+                               headers={"Authorization": f"Bearer {admin_token}"})
+        assert res.status_code == 400
+
+    def test_invalid_field(self, client, admin_token):
+        res = client.patch("/api/users/uuid-1", json={"name": "X"},
+                           headers={"Authorization": f"Bearer {admin_token}"})
+        # short name validation
+        res2 = client.patch("/api/users/uuid-1", json={"name": "X"},
+                            headers={"Authorization": f"Bearer {admin_token}"})
+        assert res2.status_code == 400
+        assert "name" in res2.get_json()["errors"]

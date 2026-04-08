@@ -1,4 +1,5 @@
-import math
+import base64
+from datetime import datetime
 
 
 FUEL_TYPES = ["octane", "diesel", "petrol"]
@@ -8,16 +9,27 @@ ROLES = ["admin", "employee", "customer"]
 PUMP_EMPLOYEE_ROLES = ["pump_admin", "employee"]
 
 
-def get_pagination_params(request):
+def get_cursor_params(request):
     try:
-        page = int(request.args.get('page', 1))
         limit = min(int(request.args.get('limit', 10)), 100)
-        if page < 1 or limit < 1:
+        if limit < 1:
             raise ValueError
     except (ValueError, TypeError):
         return None, None
-    return page, limit
+    cursor = request.args.get('cursor', None)
+    return cursor, limit
 
+
+def encode_cursor(dt: datetime) -> str:
+    return base64.b64encode(dt.isoformat().encode()).decode()
+
+
+def decode_cursor(cursor: str) -> datetime:
+    try:
+        iso = base64.b64decode(cursor.encode()).decode()
+        return datetime.fromisoformat(iso)
+    except Exception:
+        return None
 
 
 def success_response(message, data):
@@ -28,17 +40,16 @@ def created_response(message, data):
     return {"status": 201, "message": message, "data": data}
 
 
-def paginated_response(message, key, items, page, limit, total):
+def cursor_response(message, key, items, next_cursor, has_more, limit):
     return {
         "status": 200,
         "message": message,
         "data": {
             key: items,
             "pagination": {
-                "page": page,
                 "limit": limit,
-                "total": total,
-                "total_pages": math.ceil(total / limit) if total > 0 else 0
+                "next_cursor": next_cursor,
+                "has_more": has_more
             }
         }
     }

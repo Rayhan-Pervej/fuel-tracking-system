@@ -2,7 +2,8 @@ from flask import Blueprint, request, jsonify
 from marshmallow import ValidationError
 from app.models.fuel_price import FuelPriceModel
 from app.schemas.fuel_price import FuelPriceSchema
-from app.constants import get_pagination_params, success_response, created_response, paginated_response, error_response
+from app.services.fuel_price_service import FuelPriceService
+from app.constants import get_cursor_params, success_response, created_response, cursor_response, error_response
 from app.middleware.auth import require_auth, require_role
 
 fuel_price_bp = Blueprint("fuel_price", __name__)
@@ -33,12 +34,14 @@ def get_latest_fuel_price(fuel_type):
 @fuel_price_bp.route('/', methods=['GET'])
 @require_auth
 def get_fuel_prices():
-    page, limit = get_pagination_params(request)
-    if page is None or limit is None:
+    cursor, limit = get_cursor_params(request)
+    if limit is None:
         return jsonify(error_response(400, "Invalid pagination parameters")), 400
-    fuel_prices = FuelPriceModel.get_all(page=page, limit=limit)
-    total = FuelPriceModel.collection().count_documents({})
-    return jsonify(paginated_response("Fuel prices retrieved successfully", "fuel_prices", fuel_prices, page, limit, total)), 200
+    fuel_prices, next_cursor, has_more = FuelPriceService.get_filtered(
+        fuel_type=request.args.get("fuel_type"),
+        cursor=cursor, limit=limit
+    )
+    return jsonify(cursor_response("Fuel prices retrieved successfully", "fuel_prices", fuel_prices, next_cursor, has_more, limit)), 200
 
 
 @fuel_price_bp.route('/<fuel_price_id>', methods=['GET'])

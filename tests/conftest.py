@@ -13,7 +13,8 @@ def app():
             mock_socketio.init_app = MagicMock()
             mock_socketio.run = MagicMock()
 
-            with patch("app._create_indexes"):
+            with patch("app._create_indexes"), \
+                 patch("app.validate_config"):
                 from app import create_app
                 flask_app = create_app()
                 flask_app.config["TESTING"] = True

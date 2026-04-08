@@ -23,10 +23,13 @@ REGISTER_PAYLOAD = {
 class TestLogin:
     def test_success(self, client):
         with patch("app.models.user.UserModel.get_by_email", return_value=USER), \
-             patch("app.models.user.UserModel.check_password", return_value=True):
+             patch("app.models.user.UserModel.check_password", return_value=True), \
+             patch("app.models.user.UserModel.set_refresh_token"):
             res = client.post("/api/auth/login", json={"email": "rayhan@example.com", "password": "secret123"})
         assert res.status_code == 200
-        assert "token" in res.get_json()["data"]
+        data = res.get_json()["data"]
+        assert "access_token" in data
+        assert "refresh_token" in data
 
     def test_invalid_password(self, client):
         with patch("app.models.user.UserModel.get_by_email", return_value=USER), \

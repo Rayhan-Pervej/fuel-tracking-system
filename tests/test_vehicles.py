@@ -75,9 +75,7 @@ class TestGetVehiclesByUser:
     def test_success(self, client, admin_token):
         vehicles = [{"_id": "veh-1", "user_id": "user-1", "vehicle_number": "DH-1234", "type": "car"}]
         with patch("app.models.user.UserModel.get_by_id", return_value=USER), \
-             patch("app.models.vehicle.VehicleModel.get_by_user_id", return_value=vehicles), \
-             patch("app.models.vehicle.VehicleModel.collection") as mock_col:
-            mock_col.return_value.count_documents.return_value = 1
+             patch("app.services.vehicle_service.VehicleService.get_filtered", return_value=(vehicles, None, False)):
             res = client.get("/api/vehicles/user/user-1",
                              headers={"Authorization": f"Bearer {admin_token}"})
         assert res.status_code == 200
@@ -97,9 +95,7 @@ class TestGetVehiclesByUser:
 class TestGetAllVehicles:
     def test_success(self, client, admin_token):
         vehicles = [{"_id": "veh-1", "user_id": "user-1", "vehicle_number": "DH-1234", "type": "car"}]
-        with patch("app.models.vehicle.VehicleModel.get_all", return_value=vehicles), \
-             patch("app.models.vehicle.VehicleModel.collection") as mock_col:
-            mock_col.return_value.count_documents.return_value = 1
+        with patch("app.services.vehicle_service.VehicleService.get_filtered", return_value=(vehicles, None, False)):
             res = client.get("/api/vehicles/",
                              headers={"Authorization": f"Bearer {admin_token}"})
         assert res.status_code == 200
@@ -112,3 +108,45 @@ class TestGetAllVehicles:
         res = client.get("/api/vehicles/",
                          headers={"Authorization": f"Bearer {employee_token}"})
         assert res.status_code == 403
+
+
+class TestUpdateVehicle:
+    VEHICLE_DB = {"_id": "veh-1", "user_id": "user-1", "vehicle_number": "DH-1234", "type": "car"}
+
+    def test_success_as_admin(self, client, admin_token):
+        updated = {**self.VEHICLE_DB, "type": "truck"}
+        with patch("app.models.vehicle.VehicleModel.get_by_id", return_value=self.VEHICLE_DB), \
+             patch("app.models.vehicle.VehicleModel.update", return_value=updated):
+            res = client.patch("/api/vehicles/veh-1", json={"vehicle_type": "truck"},
+                               headers={"Authorization": f"Bearer {admin_token}"})
+        assert res.status_code == 200
+        assert res.get_json()["data"]["vehicle"]["type"] == "truck"
+
+    def test_not_found(self, client, admin_token):
+        with patch("app.models.vehicle.VehicleModel.get_by_id", return_value=None):
+            res = client.patch("/api/vehicles/bad-id", json={"vehicle_type": "truck"},
+                               headers={"Authorization": f"Bearer {admin_token}"})
+        assert res.status_code == 404
+
+    def test_no_token(self, client):
+        res = client.patch("/api/vehicles/veh-1", json={"vehicle_type": "truck"})
+        assert res.status_code == 401
+
+    def test_forbidden_other_user(self, client, customer_token):
+        other_vehicle = {**self.VEHICLE_DB, "user_id": "other-user"}
+        with patch("app.models.vehicle.VehicleModel.get_by_id", return_value=other_vehicle):
+            res = client.patch("/api/vehicles/veh-1", json={"vehicle_type": "truck"},
+                               headers={"Authorization": f"Bearer {customer_token}"})
+        assert res.status_code == 403
+
+    def test_empty_body(self, client, admin_token):
+        with patch("app.models.vehicle.VehicleModel.get_by_id", return_value=self.VEHICLE_DB):
+            res = client.patch("/api/vehicles/veh-1", json={},
+                               headers={"Authorization": f"Bearer {admin_token}"})
+        assert res.status_code == 400
+
+    def test_invalid_vehicle_type(self, client, admin_token):
+        res = client.patch("/api/vehicles/veh-1", json={"vehicle_type": "spaceship"},
+                           headers={"Authorization": f"Bearer {admin_token}"})
+        assert res.status_code == 400
+        assert "vehicle_type" in res.get_json()["errors"]

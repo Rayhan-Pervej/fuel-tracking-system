@@ -76,9 +76,7 @@ class TestGetPump:
 class TestGetAllPumps:
     def test_success(self, client, admin_token):
         pumps = [PUMP]
-        with patch("app.models.pump.PumpModel.get_all", return_value=pumps), \
-             patch("app.models.pump.PumpModel.collection") as mock_col:
-            mock_col.return_value.count_documents.return_value = 1
+        with patch("app.services.pump_service.PumpService.get_filtered", return_value=(pumps, None, False)):
             res = client.get("/api/pumps/",
                              headers={"Authorization": f"Bearer {admin_token}"})
         assert res.status_code == 200
@@ -88,10 +86,46 @@ class TestGetAllPumps:
         res = client.get("/api/pumps/")
         assert res.status_code == 401
 
-    def test_invalid_pagination(self, client, admin_token):
-        with patch("app.models.pump.PumpModel.get_all", return_value=[]), \
-             patch("app.models.pump.PumpModel.collection") as mock_col:
-            mock_col.return_value.count_documents.return_value = 0
-            res = client.get("/api/pumps/?page=abc",
-                             headers={"Authorization": f"Bearer {admin_token}"})
+    def test_invalid_limit(self, client, admin_token):
+        res = client.get("/api/pumps/?limit=abc",
+                         headers={"Authorization": f"Bearer {admin_token}"})
         assert res.status_code == 400
+
+
+class TestUpdatePump:
+    def test_success(self, client, admin_token):
+        updated = {**PUMP, "location": "Chittagong"}
+        with patch("app.models.pump.PumpModel.get_by_id", return_value=PUMP), \
+             patch("app.models.pump.PumpModel.update", return_value=updated):
+            res = client.patch("/api/pumps/pump-1", json={"location": "Chittagong"},
+                               headers={"Authorization": f"Bearer {admin_token}"})
+        assert res.status_code == 200
+        assert res.get_json()["data"]["pump"]["location"] == "Chittagong"
+
+    def test_not_found(self, client, admin_token):
+        with patch("app.models.pump.PumpModel.get_by_id", return_value=None):
+            res = client.patch("/api/pumps/bad-id", json={"location": "Chittagong"},
+                               headers={"Authorization": f"Bearer {admin_token}"})
+        assert res.status_code == 404
+
+    def test_no_token(self, client):
+        res = client.patch("/api/pumps/pump-1", json={"location": "Chittagong"})
+        assert res.status_code == 401
+
+    def test_forbidden_non_admin(self, client, employee_token):
+        res = client.patch("/api/pumps/pump-1", json={"location": "Chittagong"},
+                           headers={"Authorization": f"Bearer {employee_token}"})
+        assert res.status_code == 403
+
+    def test_empty_body(self, client, admin_token):
+        with patch("app.models.pump.PumpModel.get_by_id", return_value=PUMP):
+            res = client.patch("/api/pumps/pump-1", json={},
+                               headers={"Authorization": f"Bearer {admin_token}"})
+        assert res.status_code == 400
+
+    def test_duplicate_license(self, client, admin_token):
+        with patch("app.models.pump.PumpModel.get_by_id", return_value=PUMP), \
+             patch("app.models.pump.PumpModel.exists_by_license", return_value=True):
+            res = client.patch("/api/pumps/pump-1", json={"license": "P-002"},
+                               headers={"Authorization": f"Bearer {admin_token}"})
+        assert res.status_code == 409

@@ -107,9 +107,7 @@ class TestGetFuelPrice:
 
 class TestGetAllFuelPrices:
     def test_success(self, client, admin_token):
-        with patch("app.models.fuel_price.FuelPriceModel.get_all", return_value=[FUEL_PRICE]), \
-             patch("app.models.fuel_price.FuelPriceModel.collection") as mock_col:
-            mock_col.return_value.count_documents.return_value = 1
+        with patch("app.services.fuel_price_service.FuelPriceService.get_filtered", return_value=([FUEL_PRICE], None, False)):
             res = client.get("/api/fuel-prices/",
                              headers={"Authorization": f"Bearer {admin_token}"})
         assert res.status_code == 200
@@ -119,7 +117,7 @@ class TestGetAllFuelPrices:
         res = client.get("/api/fuel-prices/")
         assert res.status_code == 401
 
-    def test_invalid_pagination(self, client, admin_token):
-        res = client.get("/api/fuel-prices/?page=abc",
+    def test_invalid_limit(self, client, admin_token):
+        res = client.get("/api/fuel-prices/?limit=abc",
                          headers={"Authorization": f"Bearer {admin_token}"})
         assert res.status_code == 400

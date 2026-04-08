@@ -217,15 +217,13 @@ class TestGetEmployees:
     def test_success(self, client, admin_token):
         employees = [RECORD]
         with patch("app.models.pump.PumpModel.get_by_id", return_value=PUMP), \
-             patch("app.models.pump_employee.PumpEmployeeModel.get_by_pump", return_value=employees), \
-             patch("app.models.pump_employee.PumpEmployeeModel.collection") as mock_col:
-            mock_col.return_value.count_documents.return_value = 1
+             patch("app.models.pump_employee.PumpEmployeeModel.get_by_pump", return_value=employees):
             res = client.get("/api/pumps/pump-1/employees",
                              headers={"Authorization": f"Bearer {admin_token}"})
         assert res.status_code == 200
         body = res.get_json()
         assert len(body["data"]["employees"]) == 1
-        assert body["data"]["pagination"]["total"] == 1
+        assert body["data"]["pagination"]["has_more"] is False
 
     def test_no_token(self, client):
         res = client.get("/api/pumps/pump-1/employees")
@@ -237,8 +235,8 @@ class TestGetEmployees:
                              headers={"Authorization": f"Bearer {admin_token}"})
         assert res.status_code == 404
 
-    def test_invalid_pagination(self, client, admin_token):
+    def test_invalid_limit(self, client, admin_token):
         with patch("app.models.pump.PumpModel.get_by_id", return_value=PUMP):
-            res = client.get("/api/pumps/pump-1/employees?page=abc",
+            res = client.get("/api/pumps/pump-1/employees?limit=abc",
                              headers={"Authorization": f"Bearer {admin_token}"})
         assert res.status_code == 400

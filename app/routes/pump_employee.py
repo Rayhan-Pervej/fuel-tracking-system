@@ -4,7 +4,7 @@ from app.models.pump import PumpModel
 from app.models.user import UserModel
 from app.models.pump_employee import PumpEmployeeModel
 from app.schemas.pump_employee import AddPumpEmployeeSchema, UpdatePumpEmployeeRoleSchema
-from app.constants import get_pagination_params, success_response, created_response, paginated_response, error_response
+from app.constants import get_cursor_params, success_response, created_response, cursor_response, error_response
 from app.middleware.auth import require_auth, require_role
 
 pump_employee_bp = Blueprint("pump_employee", __name__)
@@ -91,12 +91,18 @@ def get_employees(pump_id):
     pump = PumpModel.get_by_id(pump_id)
     if not pump:
         return jsonify(error_response(404, "Pump not found")), 404
-
-    page, limit = get_pagination_params(request)
-    if page is None or limit is None:
+    if g.role != "admin" and not PumpEmployeeModel.exists(pump_id, g.user_id):
+        return jsonify(error_response(403, "You can only view employees of pumps you work at")), 403
+    
+    cursor, limit = get_cursor_params(request)
+    if limit is None:
         return jsonify(error_response(400, "Invalid pagination parameters")), 400
 
-    employees = PumpEmployeeModel.get_by_pump(pump_id, page=page, limit=limit)
-    total = PumpEmployeeModel.collection().count_documents({"pump_id": pump_id})
-    return jsonify(paginated_response("Employees retrieved successfully", "employees", employees, page, limit, total)), 200
+    from app.constants import decode_cursor, encode_cursor
+    after_dt = decode_cursor(cursor) if cursor else None
+    rows = PumpEmployeeModel.get_by_pump(pump_id, after_dt=after_dt, limit=limit)
+    has_more = len(rows) > limit
+    employees = rows[:limit]
+    next_cursor = encode_cursor(employees[-1]["created_at"]) if (has_more and employees) else None
+    return jsonify(cursor_response("Employees retrieved successfully", "employees", employees, next_cursor, has_more, limit)), 200
 
