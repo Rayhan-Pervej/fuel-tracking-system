@@ -65,6 +65,13 @@ def enrich_transactions(transactions):
     return transactions
 
 
+
+def build_init_payload():
+    stats = get_dashboard_stats()
+    recent = list(mongo.db["transactions"].find().sort("created_at", -1).limit(20))
+    recent = enrich_transactions(recent)
+    return {"stats": stats, "transactions": recent}
+
 @socketio.on("connect", namespace="/dashboard")
 def on_connect(auth=None):
     token = (auth or {}).get("token", "")
@@ -78,11 +85,13 @@ def on_connect(auth=None):
         return
 
     logger.info("Dashboard client connected")
-    stats = get_dashboard_stats()
-    recent = list(mongo.db["transactions"].find().sort("created_at", -1).limit(20))
-    recent = enrich_transactions(recent)
-    emit("init", {"stats": stats, "transactions": recent})
+    payload = build_init_payload()
+    emit("init", payload)
 
+@socketio.on("request_init", namespace="/dashboard")
+def handle_request_init():
+    payload = build_init_payload()
+    emit("init", payload)
 
 def register_socket_events():
     socketio.start_background_task(watch_transactions)
