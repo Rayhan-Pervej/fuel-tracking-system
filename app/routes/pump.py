@@ -39,7 +39,9 @@ def get_pumps():
         return jsonify(error_response(400, "Invalid pagination parameters")), 400
     pumps, next_cursor, has_more = PumpService.get_filtered(
         location=request.args.get("location"),
-        cursor=cursor, limit=limit
+        license=request.args.get("license"),
+        cursor=cursor,
+        limit=limit
     )
     return jsonify(cursor_response("Pumps retrieved successfully", "pumps", pumps, next_cursor, has_more, limit)), 200
 

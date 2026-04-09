@@ -39,6 +39,9 @@ def get_fuel_prices():
         return jsonify(error_response(400, "Invalid pagination parameters")), 400
     fuel_prices, next_cursor, has_more = FuelPriceService.get_filtered(
         fuel_type=request.args.get("fuel_type"),
+        effective_from=request.args.get("effective_from"),
+        effective_from_after=request.args.get("effective_from_after"),
+        effective_from_before=request.args.get("effective_from_before"),
         cursor=cursor, limit=limit
     )
     return jsonify(cursor_response("Fuel prices retrieved successfully", "fuel_prices", fuel_prices, next_cursor, has_more, limit)), 200

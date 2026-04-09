@@ -5,15 +5,17 @@ from app.constants import encode_cursor, decode_cursor
 class UserService:
 
     @staticmethod
-    def build_query(role=None):
+    def build_query(role=None, email= None):
         query = {}
         if role:
             query["role"] = role
+        if email:
+            query["email"] = {"$regex": email, "$options": "i"}
         return query
 
     @staticmethod
-    def get_filtered(role, cursor, limit):
-        query = UserService.build_query(role=role)
+    def get_filtered(role=None, cursor=None, limit=10, email=None):
+        query = UserService.build_query(role=role, email=email)
         after_dt = decode_cursor(cursor) if cursor else None
         rows = UserModel.get_page(query, after_dt=after_dt, limit=limit)
         has_more = len(rows) > limit

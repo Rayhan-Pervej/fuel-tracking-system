@@ -321,6 +321,7 @@ Get all users (paginated).
 | `limit` | int | No | Page size (default: 10, max: 100) |
 | `cursor` | string | No | Opaque cursor from previous response |
 | `role` | string | No | Filter by role: `admin`, `employee`, `customer` |
+| `email` | string | No | Filter by email (partial match, case-insensitive) |
 
 **Responses:** `200` / `400` / `401` / `403`
 
@@ -399,7 +400,7 @@ Get all vehicles (paginated).
 | `limit` | int | No | Page size (default: 10, max: 100) |
 | `cursor` | string | No | Opaque cursor from previous response |
 | `user_email` | string | No | Filter by owner email (exact match) |
-| `vehicle_type` | string | No | Filter by vehicle type: `car`, `truck`, `bike`, `bus` |
+| `type` | string | No | Filter by vehicle type: `car`, `truck`, `bike`, `bus` |
 | `search` | string | No | Partial, case-insensitive match on `vehicle_number` |
 
 **Responses:** `200` / `400` / `401` / `403`
@@ -499,7 +500,8 @@ Get all pumps (paginated).
 |-------|------|----------|-------------|
 | `limit` | int | No | Page size (default: 10, max: 100) |
 | `cursor` | string | No | Opaque cursor from previous response |
-| `location` | string | No | Filter by location (exact match) |
+| `location` | string | No | Filter by location (partial match, case-insensitive) |
+| `license` | string | No | Filter by license (partial match, case-insensitive) |
 
 **Responses:** `200` / `400` / `401`
 
@@ -539,9 +541,9 @@ Delete a pump and cascade-delete all its employee assignments.
 #### `GET /api/pumps/me/pumps`
 Get all pump assignments for the currently authenticated user.
 
-**Auth required:** Any authenticated user
+**Auth required:** `employee` or `admin`
 
-**Responses:** `200` / `401`
+**Responses:** `200` / `401` / `403`
 
 ---
 
@@ -557,6 +559,7 @@ Add an employee to a pump.
 
 > `role` must be `pump_admin` or `employee`. Only one `pump_admin` allowed per pump.
 > The user being added must have global role `employee`.
+> An employee can only be assigned to one pump at a time.
 
 **Responses:** `201` / `400` / `401` / `403` / `404` / `409 Already assigned`
 
@@ -644,6 +647,9 @@ Get all fuel prices (paginated).
 | `limit` | int | No | Page size (default: 10, max: 100) |
 | `cursor` | string | No | Opaque cursor from previous response |
 | `fuel_type` | string | No | Filter by fuel type: `octane`, `diesel`, `petrol` |
+| `effective_from` | string | No | Exact date match (YYYY-MM-DD). Ignored if range params are provided |
+| `effective_from_after` | string | No | Filter prices effective on or after this date (YYYY-MM-DD) |
+| `effective_from_before` | string | No | Filter prices effective on or before this date (YYYY-MM-DD) |
 
 **Responses:** `200` / `400` / `401`
 
@@ -766,6 +772,8 @@ Get all transactions for a pump (paginated).
 | `limit` | int | No | Page size (default: 10, max: 100) |
 | `cursor` | string | No | Opaque cursor from previous response |
 | `fuel_type` | string | No | Filter by fuel type: `octane`, `diesel`, `petrol` |
+| `from` | string | No | Start date filter `YYYY-MM-DD` (requires `to`) |
+| `to` | string | No | End date filter `YYYY-MM-DD` (requires `from`) |
 
 **Responses:** `200` / `400` / `401` / `403` / `404 Pump not found`
 

@@ -133,13 +133,22 @@ def get_transactions_by_pump(pump_id):
     if g.role != "admin" and not PumpEmployeeModel.is_pump_admin(pump_id, g.user_id):
         if not PumpEmployeeModel.exists(pump_id, g.user_id):
             return jsonify(error_response(403, "You can only view transactions for pumps you work at")), 403
-
+    from_date = request.args.get("from")
+    to_date = request.args.get("to")
+    if (from_date and not to_date) or (to_date and not from_date):
+        return jsonify(error_response(400, "Both 'from' and 'to' are required for date filtering")), 400
+    if from_date:
+        try:
+            datetime.strptime(from_date, "%Y-%m-%d")
+            datetime.strptime(to_date, "%Y-%m-%d")
+        except ValueError:
+            return jsonify(error_response(400, "Dates must be in YYYY-MM-DD format")), 400
     cursor, limit = get_cursor_params(request)
     if limit is None:
         return jsonify(error_response(400, "Invalid pagination parameters")), 400
 
     transactions, next_cursor, has_more = TransactionService.get_filtered(
-        from_date=None, to_date=None,
+        from_date=from_date, to_date=to_date,
         vehicle_id=None, pump_id=pump_id,
         fuel_type=request.args.get("fuel_type"),
         cursor=cursor, limit=limit

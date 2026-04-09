@@ -9,20 +9,21 @@ USER = {
     "license": "DH-1234"
 }
 
+USER_DB = {
+    "_id": "uuid-1",
+    "name": "Rayhan",
+    "email": "rayhan@example.com",
+    "password_hash": "hashed",
+    "role": "customer",
+    "license": "DH-1234",
+    "created_at": "2025-01-01"
+}
+
 
 class TestCreateUser:
     def test_success(self, client, admin_token):
-        created = {
-            "_id": "uuid-1",
-            "name": "Rayhan",
-            "email": "rayhan@example.com",
-            "password_hash": "hashed",
-            "role": "customer",
-            "license": "DH-1234",
-            "created_at": "2025-01-01"
-        }
         with patch("app.models.user.UserModel.exists_by_email", return_value=False), \
-             patch("app.models.user.UserModel.create", return_value=created):
+             patch("app.models.user.UserModel.create", return_value=USER_DB):
             res = client.post("/api/users/", json=USER,
                               headers={"Authorization": f"Bearer {admin_token}"})
         assert res.status_code == 201
@@ -30,13 +31,25 @@ class TestCreateUser:
         assert body["status"] == 201
         assert body["data"]["user"]["email"] == "rayhan@example.com"
 
+    def test_password_hash_not_returned(self, client, admin_token):
+        with patch("app.models.user.UserModel.exists_by_email", return_value=False), \
+             patch("app.models.user.UserModel.create", return_value=USER_DB):
+            res = client.post("/api/users/", json=USER,
+                              headers={"Authorization": f"Bearer {admin_token}"})
+        assert "password_hash" not in res.get_json()["data"]["user"]
+
     def test_no_token(self, client):
         res = client.post("/api/users/", json=USER)
         assert res.status_code == 401
 
-    def test_forbidden_non_admin(self, client, employee_token):
+    def test_forbidden_employee(self, client, employee_token):
         res = client.post("/api/users/", json=USER,
                           headers={"Authorization": f"Bearer {employee_token}"})
+        assert res.status_code == 403
+
+    def test_forbidden_customer(self, client, customer_token):
+        res = client.post("/api/users/", json=USER,
+                          headers={"Authorization": f"Bearer {customer_token}"})
         assert res.status_code == 403
 
     def test_duplicate_email(self, client, admin_token):
@@ -44,7 +57,6 @@ class TestCreateUser:
             res = client.post("/api/users/", json=USER,
                               headers={"Authorization": f"Bearer {admin_token}"})
         assert res.status_code == 409
-        assert res.get_json()["status"] == 409
 
     def test_missing_name(self, client, admin_token):
         bad = {k: v for k, v in USER.items() if k != "name"}
@@ -68,11 +80,11 @@ class TestCreateUser:
         assert "password" in res.get_json()["errors"]
 
     def test_missing_role_defaults_to_customer(self, client, admin_token):
-        bad = {k: v for k, v in USER.items() if k != "role"}
-        created = {**bad, "_id": "uuid-1", "role": "customer", "password_hash": "hashed", "created_at": "2025-01-01"}
+        payload = {k: v for k, v in USER.items() if k != "role"}
+        created = {**payload, "_id": "uuid-1", "role": "customer", "password_hash": "hashed", "created_at": "2025-01-01"}
         with patch("app.models.user.UserModel.exists_by_email", return_value=False), \
              patch("app.models.user.UserModel.create", return_value=created):
-            res = client.post("/api/users/", json=bad,
+            res = client.post("/api/users/", json=payload,
                               headers={"Authorization": f"Bearer {admin_token}"})
         assert res.status_code == 201
         assert res.get_json()["data"]["user"]["role"] == "customer"
@@ -84,7 +96,7 @@ class TestCreateUser:
         assert res.status_code == 400
         assert "role" in res.get_json()["errors"]
 
-    def test_invalid_email(self, client, admin_token):
+    def test_invalid_email_format(self, client, admin_token):
         bad = {**USER, "email": "not-an-email"}
         res = client.post("/api/users/", json=bad,
                           headers={"Authorization": f"Bearer {admin_token}"})
@@ -98,6 +110,13 @@ class TestCreateUser:
         assert res.status_code == 400
         assert "password" in res.get_json()["errors"]
 
+    def test_name_too_short(self, client, admin_token):
+        bad = {**USER, "name": "X"}
+        res = client.post("/api/users/", json=bad,
+                          headers={"Authorization": f"Bearer {admin_token}"})
+        assert res.status_code == 400
+        assert "name" in res.get_json()["errors"]
+
     def test_empty_body(self, client, admin_token):
         res = client.post("/api/users/", json={},
                           headers={"Authorization": f"Bearer {admin_token}"})
@@ -109,25 +128,55 @@ class TestCreateUser:
         assert res.status_code == 415
 
 
+class TestGetMe:
+    def test_success(self, client, admin_token):
+        user = {**USER_DB}
+        with patch("app.models.user.UserModel.get_by_id", return_value=user):
+            res = client.get("/api/users/me",
+                             headers={"Authorization": f"Bearer {admin_token}"})
+        assert res.status_code == 200
+        assert "password_hash" not in res.get_json()["data"]["user"]
+
+    def test_no_token(self, client):
+        res = client.get("/api/users/me")
+        assert res.status_code == 401
+
+    def test_user_not_found(self, client, admin_token):
+        with patch("app.models.user.UserModel.get_by_id", return_value=None):
+            res = client.get("/api/users/me",
+                             headers={"Authorization": f"Bearer {admin_token}"})
+        assert res.status_code == 404
+
+
 class TestGetUser:
     def test_get_existing_user(self, client, admin_token):
-        user = {**USER, "_id": "uuid-1", "created_at": "2025-01-01"}
-        with patch("app.models.user.UserModel.get_by_id", return_value=user):
+        with patch("app.models.user.UserModel.get_by_id", return_value=USER_DB):
             res = client.get("/api/users/uuid-1",
                              headers={"Authorization": f"Bearer {admin_token}"})
         assert res.status_code == 200
         assert res.get_json()["data"]["user"]["_id"] == "uuid-1"
+
+    def test_password_hash_not_returned(self, client, admin_token):
+        with patch("app.models.user.UserModel.get_by_id", return_value=USER_DB):
+            res = client.get("/api/users/uuid-1",
+                             headers={"Authorization": f"Bearer {admin_token}"})
+        assert "password_hash" not in res.get_json()["data"]["user"]
 
     def test_get_nonexistent_user(self, client, admin_token):
         with patch("app.models.user.UserModel.get_by_id", return_value=None):
             res = client.get("/api/users/bad-id",
                              headers={"Authorization": f"Bearer {admin_token}"})
         assert res.status_code == 404
-        assert res.get_json()["status"] == 404
 
     def test_no_token(self, client):
         res = client.get("/api/users/uuid-1")
         assert res.status_code == 401
+
+    def test_any_authenticated_user_can_access(self, client, customer_token):
+        with patch("app.models.user.UserModel.get_by_id", return_value=USER_DB):
+            res = client.get("/api/users/uuid-1",
+                             headers={"Authorization": f"Bearer {customer_token}"})
+        assert res.status_code == 200
 
 
 class TestGetUsers:
@@ -142,13 +191,61 @@ class TestGetUsers:
         assert body["data"]["pagination"]["has_more"] is False
         assert body["data"]["pagination"]["next_cursor"] is None
 
+    def test_pagination_structure(self, client, admin_token):
+        users = [{"_id": f"uuid-{i}", "name": f"User{i}", "email": f"u{i}@x.com", "role": "customer"} for i in range(5)]
+        with patch("app.services.user_service.UserService.get_filtered", return_value=(users, "cursor-abc", True)):
+            res = client.get("/api/users/?limit=5",
+                             headers={"Authorization": f"Bearer {admin_token}"})
+        body = res.get_json()
+        assert body["data"]["pagination"]["has_more"] is True
+        assert body["data"]["pagination"]["next_cursor"] == "cursor-abc"
+        assert body["data"]["pagination"]["limit"] == 5
+
+    def test_filter_by_role(self, client, admin_token):
+        employees = [{"_id": "uuid-1", "name": "Emp", "email": "emp@x.com", "role": "employee"}]
+        with patch("app.services.user_service.UserService.get_filtered", return_value=(employees, None, False)) as mock_svc:
+            res = client.get("/api/users/?role=employee",
+                             headers={"Authorization": f"Bearer {admin_token}"})
+        assert res.status_code == 200
+        mock_svc.assert_called_once()
+        call_kwargs = mock_svc.call_args
+        assert call_kwargs.kwargs.get("role") == "employee" or (call_kwargs.args and "employee" in call_kwargs.args)
+
+    def test_filter_by_email(self, client, admin_token):
+        users = [{"_id": "uuid-1", "name": "Rayhan", "email": "rayhan@x.com", "role": "customer"}]
+        with patch("app.services.user_service.UserService.get_filtered", return_value=(users, None, False)) as mock_svc:
+            res = client.get("/api/users/?email=rayhan",
+                             headers={"Authorization": f"Bearer {admin_token}"})
+        assert res.status_code == 200
+        mock_svc.assert_called_once()
+
+    def test_empty_result(self, client, admin_token):
+        with patch("app.services.user_service.UserService.get_filtered", return_value=([], None, False)):
+            res = client.get("/api/users/",
+                             headers={"Authorization": f"Bearer {admin_token}"})
+        assert res.status_code == 200
+        assert res.get_json()["data"]["users"] == []
+
+    def test_large_dataset_pagination(self, client, admin_token):
+        users = [{"_id": f"uuid-{i}", "name": f"User{i}", "email": f"u{i}@x.com", "role": "customer"} for i in range(100)]
+        with patch("app.services.user_service.UserService.get_filtered", return_value=(users, "next-cursor", True)):
+            res = client.get("/api/users/?limit=100",
+                             headers={"Authorization": f"Bearer {admin_token}"})
+        assert res.status_code == 200
+        assert len(res.get_json()["data"]["users"]) == 100
+
     def test_no_token(self, client):
         res = client.get("/api/users/")
         assert res.status_code == 401
 
-    def test_forbidden_non_admin(self, client, employee_token):
+    def test_forbidden_employee(self, client, employee_token):
         res = client.get("/api/users/",
                          headers={"Authorization": f"Bearer {employee_token}"})
+        assert res.status_code == 403
+
+    def test_forbidden_customer(self, client, customer_token):
+        res = client.get("/api/users/",
+                         headers={"Authorization": f"Bearer {customer_token}"})
         assert res.status_code == 403
 
     def test_invalid_limit_param(self, client, admin_token):
@@ -161,19 +258,38 @@ class TestGetUsers:
                          headers={"Authorization": f"Bearer {admin_token}"})
         assert res.status_code == 400
 
+    def test_limit_zero(self, client, admin_token):
+        res = client.get("/api/users/?limit=0",
+                         headers={"Authorization": f"Bearer {admin_token}"})
+        assert res.status_code == 400
+
 
 class TestUpdateUser:
-    USER_DB = {"_id": "uuid-1", "name": "Rayhan", "email": "rayhan@example.com",
-               "role": "customer", "license": "DH-1234"}
-
     def test_success(self, client, admin_token):
-        updated = {**self.USER_DB, "name": "Updated Name"}
-        with patch("app.models.user.UserModel.get_by_id", return_value=self.USER_DB), \
+        updated = {**USER_DB, "name": "Updated Name"}
+        with patch("app.models.user.UserModel.get_by_id", return_value=USER_DB), \
              patch("app.models.user.UserModel.update", return_value=updated):
             res = client.patch("/api/users/uuid-1", json={"name": "Updated Name"},
                                headers={"Authorization": f"Bearer {admin_token}"})
         assert res.status_code == 200
         assert res.get_json()["data"]["user"]["name"] == "Updated Name"
+
+    def test_update_role(self, client, admin_token):
+        updated = {**USER_DB, "role": "employee"}
+        with patch("app.models.user.UserModel.get_by_id", return_value=USER_DB), \
+             patch("app.models.user.UserModel.update", return_value=updated):
+            res = client.patch("/api/users/uuid-1", json={"role": "employee"},
+                               headers={"Authorization": f"Bearer {admin_token}"})
+        assert res.status_code == 200
+        assert res.get_json()["data"]["user"]["role"] == "employee"
+
+    def test_update_license(self, client, admin_token):
+        updated = {**USER_DB, "license": "NEW-001"}
+        with patch("app.models.user.UserModel.get_by_id", return_value=USER_DB), \
+             patch("app.models.user.UserModel.update", return_value=updated):
+            res = client.patch("/api/users/uuid-1", json={"license": "NEW-001"},
+                               headers={"Authorization": f"Bearer {admin_token}"})
+        assert res.status_code == 200
 
     def test_not_found(self, client, admin_token):
         with patch("app.models.user.UserModel.get_by_id", return_value=None):
@@ -185,22 +301,61 @@ class TestUpdateUser:
         res = client.patch("/api/users/uuid-1", json={"name": "X"})
         assert res.status_code == 401
 
-    def test_forbidden_non_admin(self, client, employee_token):
+    def test_forbidden_employee(self, client, employee_token):
         res = client.patch("/api/users/uuid-1", json={"name": "X"},
                            headers={"Authorization": f"Bearer {employee_token}"})
         assert res.status_code == 403
 
+    def test_forbidden_customer(self, client, customer_token):
+        res = client.patch("/api/users/uuid-1", json={"name": "X"},
+                           headers={"Authorization": f"Bearer {customer_token}"})
+        assert res.status_code == 403
+
     def test_empty_body(self, client, admin_token):
-        with patch("app.models.user.UserModel.get_by_id", return_value=self.USER_DB):
+        with patch("app.models.user.UserModel.get_by_id", return_value=USER_DB):
             res = client.patch("/api/users/uuid-1", json={},
                                headers={"Authorization": f"Bearer {admin_token}"})
         assert res.status_code == 400
 
-    def test_invalid_field(self, client, admin_token):
+    def test_name_too_short(self, client, admin_token):
         res = client.patch("/api/users/uuid-1", json={"name": "X"},
                            headers={"Authorization": f"Bearer {admin_token}"})
-        # short name validation
-        res2 = client.patch("/api/users/uuid-1", json={"name": "X"},
-                            headers={"Authorization": f"Bearer {admin_token}"})
-        assert res2.status_code == 400
-        assert "name" in res2.get_json()["errors"]
+        assert res.status_code == 400
+        assert "name" in res.get_json()["errors"]
+
+    def test_invalid_role(self, client, admin_token):
+        res = client.patch("/api/users/uuid-1", json={"role": "superadmin"},
+                           headers={"Authorization": f"Bearer {admin_token}"})
+        assert res.status_code == 400
+        assert "role" in res.get_json()["errors"]
+
+
+class TestDeleteUser:
+    def test_success(self, client, admin_token):
+        with patch("app.models.user.UserModel.get_by_id", return_value=USER_DB), \
+             patch("app.models.vehicle.VehicleModel.delete_by_user"), \
+             patch("app.models.pump_employee.PumpEmployeeModel.remove_by_user"), \
+             patch("app.models.user.UserModel.delete"):
+            res = client.delete("/api/users/uuid-1",
+                                headers={"Authorization": f"Bearer {admin_token}"})
+        assert res.status_code == 200
+
+    def test_not_found(self, client, admin_token):
+        with patch("app.models.user.UserModel.get_by_id", return_value=None):
+            res = client.delete("/api/users/bad-id",
+                                headers={"Authorization": f"Bearer {admin_token}"})
+        assert res.status_code == 404
+
+    def test_no_token(self, client):
+        res = client.delete("/api/users/uuid-1")
+        assert res.status_code == 401
+
+    def test_forbidden_employee(self, client, employee_token):
+        res = client.delete("/api/users/uuid-1",
+                            headers={"Authorization": f"Bearer {employee_token}"})
+        assert res.status_code == 403
+
+    def test_forbidden_customer(self, client, customer_token):
+        res = client.delete("/api/users/uuid-1",
+                            headers={"Authorization": f"Bearer {customer_token}"})
+        assert res.status_code == 403

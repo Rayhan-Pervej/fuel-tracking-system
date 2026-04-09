@@ -14,6 +14,7 @@ update_schema = UpdatePumpEmployeeRoleSchema()
 
 @pump_employee_bp.route('/me/pumps', methods=['GET'])
 @require_auth
+@require_role("employee", "admin") 
 def get_my_pumps():
     assignments = PumpEmployeeModel.get_by_user(g.user_id)
     return jsonify(success_response("Pump assignments retrieved successfully", {"pumps": assignments})), 200
@@ -21,6 +22,7 @@ def get_my_pumps():
 
 @pump_employee_bp.route('/<pump_id>/employees', methods=['POST'])
 @require_auth
+@require_role("employee", "admin") 
 def add_employee(pump_id):
     pump = PumpModel.get_by_id(pump_id)
     if not pump:
@@ -39,6 +41,8 @@ def add_employee(pump_id):
     user_id = user['_id']
     if PumpEmployeeModel.exists(pump_id, user_id):
         return jsonify(error_response(409, "Employee record already exists for this user")), 409
+    if PumpEmployeeModel.is_assigned_anywhere(user_id):
+        return jsonify(error_response(409, "Employee is already assigned to another pump")), 409
     if user['role'] != 'employee':
         return jsonify(error_response(400, "Only users with employee role can be assigned to a pump")), 400
 
@@ -51,7 +55,8 @@ def add_employee(pump_id):
 
 
 @pump_employee_bp.route('/<pump_id>/employees/<user_id>', methods=['DELETE'])
-@require_auth  
+@require_auth
+@require_role("employee", "admin") 
 def remove_employee(pump_id, user_id):
     pump = PumpModel.get_by_id(pump_id)
     if not pump:
@@ -72,6 +77,7 @@ def remove_employee(pump_id, user_id):
 
 @pump_employee_bp.route('/<pump_id>/employees/<user_id>', methods=['PATCH'])
 @require_auth
+@require_role("employee", "admin") 
 def update_employee_role(pump_id, user_id):
     pump = PumpModel.get_by_id(pump_id)
     if not pump:
@@ -96,6 +102,7 @@ def update_employee_role(pump_id, user_id):
 
 @pump_employee_bp.route('/<pump_id>/employees', methods=['GET'])
 @require_auth
+@require_role("employee", "admin") 
 def get_employees(pump_id):
     pump = PumpModel.get_by_id(pump_id)
     if not pump:

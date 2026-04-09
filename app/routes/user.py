@@ -40,7 +40,8 @@ def get_users():
     users, next_cursor, has_more = UserService.get_filtered(
         role=request.args.get("role"),
         cursor=cursor,
-        limit=limit
+        limit=limit,
+        email=request.args.get("email")
     )
     for user in users:
         user.pop("password_hash", None)
