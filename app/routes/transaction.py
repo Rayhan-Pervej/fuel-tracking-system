@@ -83,6 +83,7 @@ def get_transactions():
         to_date=to_date,
         vehicle_id=request.args.get("vehicle_id"),
         pump_id=request.args.get("pump_id"),
+        fuel_type=request.args.get("fuel_type"),
         cursor=cursor,
         limit=limit
     )
@@ -117,6 +118,7 @@ def get_transactions_by_vehicle(vehicle_id):
     transactions, next_cursor, has_more = TransactionService.get_filtered(
         from_date=from_date, to_date=to_date,
         vehicle_id=vehicle_id, pump_id=None,
+        fuel_type=request.args.get("fuel_type"),
         cursor=cursor, limit=limit
     )
     return jsonify(cursor_response("Transactions retrieved successfully", "transactions", transactions, next_cursor, has_more, limit)), 200
@@ -138,6 +140,7 @@ def get_transactions_by_pump(pump_id):
     transactions, next_cursor, has_more = TransactionService.get_filtered(
         from_date=None, to_date=None,
         vehicle_id=None, pump_id=pump_id,
+        fuel_type=request.args.get("fuel_type"),
         cursor=cursor, limit=limit
     )
     return jsonify(cursor_response("Transactions retrieved successfully", "transactions", transactions, next_cursor, has_more, limit)), 200

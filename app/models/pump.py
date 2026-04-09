@@ -30,6 +30,7 @@ class PumpModel:
         except DuplicateKeyError:
             raise ValueError("Pump with this license already exists")
         return pump
+    
     @staticmethod
     def update(pump_id: str, data: dict) -> dict:
         PumpModel.collection().update_one({"_id": pump_id}, {"$set": data})

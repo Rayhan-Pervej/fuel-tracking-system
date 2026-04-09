@@ -42,3 +42,7 @@ class FuelPriceModel:
     @staticmethod
     def get_by_id(fuel_price_id: str) -> dict:
         return FuelPriceModel.collection().find_one({"_id": fuel_price_id})
+    
+    @staticmethod
+    def get_by_fuel_type(fuel_type: str) -> list:
+        return list(FuelPriceModel.collection().find({"fuel_type": fuel_type}, {"_id": 1}))
