@@ -50,3 +50,15 @@ class PumpModel:
     @staticmethod
     def delete(pump_id: str) -> None:
         PumpModel.collection().delete_one({"_id": pump_id})
+
+    @staticmethod
+    def get_ids_by_name(name: str) -> list:
+        return [p["_id"] for p in PumpModel.collection().find(
+            {"name": {"$regex": name, "$options": "i"}},
+            {"_id": 1}
+        )]
+    
+    @staticmethod
+    def get_id_by_license(license: str) -> str | None:
+        pump = PumpModel.collection().find_one({"license": license}, {"_id": 1})
+        return pump["_id"] if pump else None

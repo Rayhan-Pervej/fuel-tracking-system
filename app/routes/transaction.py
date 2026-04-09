@@ -81,8 +81,9 @@ def get_transactions():
     transactions, next_cursor, has_more = TransactionService.get_filtered(
         from_date=from_date,
         to_date=to_date,
-        vehicle_id=request.args.get("vehicle_id"),
-        pump_id=request.args.get("pump_id"),
+        vehicle_number=request.args.get("vehicle_number"),
+        pump_name=request.args.get("pump_name"),
+        pump_license=request.args.get("pump_license"),
         fuel_type=request.args.get("fuel_type"),
         cursor=cursor,
         limit=limit

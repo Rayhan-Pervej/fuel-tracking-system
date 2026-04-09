@@ -51,3 +51,9 @@ class VehicleModel:
     def delete(vehicle_id: str) -> None:
         VehicleModel.collection().delete_one({"_id": vehicle_id})
 
+    @staticmethod
+    def get_ids_by_number(vehicle_number: str) -> list:
+        return [v["_id"] for v in VehicleModel.collection().find(
+            {"vehicle_number": {"$regex": vehicle_number, "$options": "i"}},
+            {"_id": 1}
+        )]

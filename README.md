@@ -398,8 +398,8 @@ Get all vehicles (paginated).
 |-------|------|----------|-------------|
 | `limit` | int | No | Page size (default: 10, max: 100) |
 | `cursor` | string | No | Opaque cursor from previous response |
-| `user_id` | string | No | Filter by owner user ID |
-| `type` | string | No | Filter by vehicle type: `car`, `truck`, `bike`, `bus` |
+| `user_email` | string | No | Filter by owner email (exact match) |
+| `vehicle_type` | string | No | Filter by vehicle type: `car`, `truck`, `bike`, `bus` |
 | `search` | string | No | Partial, case-insensitive match on `vehicle_number` |
 
 **Responses:** `200` / `400` / `401` / `403`
@@ -709,8 +709,10 @@ Get all transactions (paginated).
 |-------|------|----------|-------------|
 | `limit` | int | No | Page size (default: 10, max: 100) |
 | `cursor` | string | No | Opaque cursor from previous response |
-| `vehicle_id` | string | No | Filter by vehicle ID |
-| `pump_id` | string | No | Filter by pump ID |
+| `vehicle_number` | string | No | Filter by vehicle number (partial match, case-insensitive) |
+| `pump_name` | string | No | Filter by pump name (partial match, case-insensitive) |
+| `pump_license` | string | No | Filter by pump license (exact match) |
+| `fuel_type` | string | No | Filter by fuel type: `octane`, `diesel`, `petrol` |
 | `from` | string | No | Start date filter `YYYY-MM-DD` (requires `to`) |
 | `to` | string | No | End date filter `YYYY-MM-DD` (requires `from`) |
 
@@ -744,6 +746,9 @@ Get all transactions for a vehicle (paginated).
 |-------|------|----------|-------------|
 | `limit` | int | No | Page size (default: 10, max: 100) |
 | `cursor` | string | No | Opaque cursor from previous response |
+| `fuel_type` | string | No | Filter by fuel type: `octane`, `diesel`, `petrol` |
+| `from` | string | No | Start date filter `YYYY-MM-DD` (requires `to`) |
+| `to` | string | No | End date filter `YYYY-MM-DD` (requires `from`) |
 
 **Responses:** `200` / `400` / `401` / `403` / `404 Vehicle not found`
 
@@ -760,6 +765,7 @@ Get all transactions for a pump (paginated).
 |-------|------|----------|-------------|
 | `limit` | int | No | Page size (default: 10, max: 100) |
 | `cursor` | string | No | Opaque cursor from previous response |
+| `fuel_type` | string | No | Filter by fuel type: `octane`, `diesel`, `petrol` |
 
 **Responses:** `200` / `400` / `401` / `403` / `404 Pump not found`
 
@@ -775,11 +781,17 @@ const socket = io('http://localhost:5000/dashboard', {
 });
 ```
 
+### Events sent from client
+
+| Event | Payload | Description |
+|-------|---------|-------------|
+| `request_init` | none | Request fresh stats + transactions (use when navigating back to dashboard without reconnecting) |
+
 ### Events received from server
 
 | Event | Payload | Description |
 |-------|---------|-------------|
-| `init` | `{ stats, transactions[] }` | Sent on connect — last 20 transactions + current stats |
+| `init` | `{ stats, transactions[] }` | Sent on connect or in response to `request_init` — last 20 transactions + current stats |
 | `new_transaction` | `{ transaction, stats }` | Broadcast when a new transaction is created |
 
 ### Stats object

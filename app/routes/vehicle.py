@@ -47,7 +47,7 @@ def get_vehicles():
     if limit is None:
         return jsonify(error_response(400, "Invalid pagination parameters")), 400
     vehicles, next_cursor, has_more = VehicleService.get_filtered(
-        user_id=request.args.get("user_id"),
+        user_email=request.args.get("user_email"),
         vehicle_type=request.args.get("type"),
         cursor=cursor, limit=limit, search=request.args.get("search")
     )
