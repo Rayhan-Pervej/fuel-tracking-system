@@ -132,3 +132,38 @@ Client never knows `created_at` is the cursor field. You can change internals fr
 | Export / report generation      | Cursor-based    |
 | Numbered pagination UI          | Offset          |
 | Infinite scroll / mobile app    | Cursor-based    |
+
+---
+
+## 4. Socket.IO — Interview Questions (Senior Level)
+
+### Scaling
+- What happens when you have 10,000 concurrent socket connections?
+- How do you scale Socket.IO across multiple server instances?
+- What is Redis adapter and why do you need it?
+
+### Reliability
+- What happens if the client loses connection mid-stream?
+- How do you handle reconnection without missing events?
+- What is acknowledgement (ack) in Socket.IO?
+
+### Security
+- How do you prevent a user from receiving another user's events?
+- What is room-based isolation?
+- How do you handle token expiry on a long-lived socket connection?
+
+### Architecture
+- When would you use raw WebSockets instead of Socket.IO?
+- What is long-polling fallback and why does it exist?
+- How does Socket.IO differ from Server-Sent Events (SSE)?
+
+---
+
+### What you already know (junior → mid level)
+- Connection lifecycle (connect, disconnect, events)
+- `emit()` vs `socketio.emit()` — reply vs broadcast
+- Namespaces — isolating traffic per feature
+- JWT auth on connect
+- When to use socket vs REST API
+- Persistent socket vs page-specific socket
+- `request_init` pattern for on-demand refresh
