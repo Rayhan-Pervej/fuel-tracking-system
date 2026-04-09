@@ -127,6 +127,24 @@ class TestCreateUser:
                           headers={"Authorization": f"Bearer {admin_token}"})
         assert res.status_code == 415
 
+    def test_with_license_field(self, client, admin_token):
+        payload = {**USER, "license": "DL-98765"}
+        created = {**USER_DB, "license": "DL-98765"}
+        with patch("app.models.user.UserModel.exists_by_email", return_value=False), \
+             patch("app.models.user.UserModel.create", return_value=created):
+            res = client.post("/api/users/", json=payload,
+                              headers={"Authorization": f"Bearer {admin_token}"})
+        assert res.status_code == 201
+        assert res.get_json()["data"]["user"]["license"] == "DL-98765"
+
+    def test_without_license_field_fails(self, client, admin_token):
+        # license is required on POST /api/users/
+        payload = {k: v for k, v in USER.items() if k != "license"}
+        res = client.post("/api/users/", json=payload,
+                          headers={"Authorization": f"Bearer {admin_token}"})
+        assert res.status_code == 400
+        assert "license" in res.get_json()["errors"]
+
 
 class TestGetMe:
     def test_success(self, client, admin_token):

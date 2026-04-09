@@ -425,6 +425,15 @@ class TestGetTransactionsByPump:
                              headers={"Authorization": f"Bearer {employee_token}"})
         assert res.status_code == 200
 
+    def test_success_as_pump_admin(self, client, pump_admin_token):
+        txns = [TRANSACTION]
+        with patch("app.models.pump.PumpModel.get_by_id", return_value=PUMP), \
+             patch("app.models.pump_employee.PumpEmployeeModel.is_pump_admin", return_value=True), \
+             patch("app.services.transaction_service.TransactionService.get_filtered", return_value=(txns, None, False)):
+            res = client.get("/api/transactions/pump/pump-1",
+                             headers={"Authorization": f"Bearer {pump_admin_token}"})
+        assert res.status_code == 200
+
     def test_forbidden_unassigned_employee(self, client, employee_token):
         with patch("app.models.pump.PumpModel.get_by_id", return_value=PUMP), \
              patch("app.models.pump_employee.PumpEmployeeModel.is_pump_admin", return_value=False), \

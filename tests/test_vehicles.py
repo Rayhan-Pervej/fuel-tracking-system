@@ -286,6 +286,14 @@ class TestGetVehiclesByUser:
         assert res.status_code == 200
         mock_svc.assert_called_once()
 
+    def test_empty_result(self, client, admin_token):
+        with patch("app.models.user.UserModel.get_by_id", return_value=USER), \
+             patch("app.services.vehicle_service.VehicleService.get_filtered", return_value=([], None, False)):
+            res = client.get("/api/vehicles/user/user-1",
+                             headers={"Authorization": f"Bearer {admin_token}"})
+        assert res.status_code == 200
+        assert res.get_json()["data"]["vehicles"] == []
+
     def test_no_token(self, client):
         res = client.get("/api/vehicles/user/user-1")
         assert res.status_code == 401
