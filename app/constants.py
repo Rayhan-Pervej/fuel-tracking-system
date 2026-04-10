@@ -5,7 +5,7 @@ from datetime import datetime
 FUEL_TYPES = ["octane", "diesel", "petrol"]
 CURRENCIES = ["BDT", "USD", "EUR", "GBP"]
 UNITS = ["liter", "gallon"]
-ROLES = ["admin", "employee", "customer"]
+ROLES = ["admin", "employee"]
 PUMP_EMPLOYEE_ROLES = ["pump_admin", "employee"]
 
 

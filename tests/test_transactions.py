@@ -14,7 +14,7 @@ def mock_session():
     return client
 
 
-VEHICLE = {"_id": "veh-1", "user_id": "user-1", "vehicle_number": "DH-1234", "vehicle_type": "car"}
+VEHICLE = {"_id": "veh-1", "vehicle_number": "DH-1234"}
 PUMP = {"_id": "pump-1", "name": "Shell", "location": "Dhaka", "license": "P-001"}
 FUEL_PRICE = {
     "_id": "fp-1",
@@ -34,7 +34,7 @@ TRANSACTION = {
     "created_at": "2025-01-01T00:00:00"
 }
 TRANSACTION_PAYLOAD = {
-    "vehicle_id": "veh-1",
+    "vehicle_number": "DH-1234",
     "pump_id": "pump-1",
     "fuel_type": "octane",
     "quantity": 10.0
@@ -43,7 +43,7 @@ TRANSACTION_PAYLOAD = {
 
 class TestCreateTransaction:
     def test_success_as_admin(self, client, admin_token):
-        with patch("app.models.vehicle.VehicleModel.get_by_id", return_value=VEHICLE), \
+        with patch("app.models.vehicle.VehicleModel.find_by_number", return_value=VEHICLE), \
              patch("app.models.pump.PumpModel.get_by_id", return_value=PUMP), \
              patch("app.models.fuel_price.FuelPriceModel.get_latest", return_value=FUEL_PRICE), \
              patch("app.models.transaction.TransactionModel.create", return_value=TRANSACTION), \
@@ -53,8 +53,19 @@ class TestCreateTransaction:
         assert res.status_code == 201
         assert res.get_json()["data"]["transaction"]["total_price"] == 1250.0
 
+    def test_vehicle_auto_created_if_not_found(self, client, admin_token):
+        with patch("app.models.vehicle.VehicleModel.find_by_number", return_value=None), \
+             patch("app.models.vehicle.VehicleModel.create", return_value=VEHICLE), \
+             patch("app.models.pump.PumpModel.get_by_id", return_value=PUMP), \
+             patch("app.models.fuel_price.FuelPriceModel.get_latest", return_value=FUEL_PRICE), \
+             patch("app.models.transaction.TransactionModel.create", return_value=TRANSACTION), \
+             patch("app.routes.transaction.mongo_client", mock_session()):
+            res = client.post("/api/transactions/", json=TRANSACTION_PAYLOAD,
+                              headers={"Authorization": f"Bearer {admin_token}"})
+        assert res.status_code == 201
+
     def test_success_as_employee_assigned_to_pump(self, client, employee_token):
-        with patch("app.models.vehicle.VehicleModel.get_by_id", return_value=VEHICLE), \
+        with patch("app.models.vehicle.VehicleModel.find_by_number", return_value=VEHICLE), \
              patch("app.models.pump.PumpModel.get_by_id", return_value=PUMP), \
              patch("app.models.pump_employee.PumpEmployeeModel.exists", return_value=True), \
              patch("app.models.fuel_price.FuelPriceModel.get_latest", return_value=FUEL_PRICE), \
@@ -65,31 +76,19 @@ class TestCreateTransaction:
         assert res.status_code == 201
 
     def test_forbidden_employee_not_assigned_to_pump(self, client, employee_token):
-        with patch("app.models.vehicle.VehicleModel.get_by_id", return_value=VEHICLE), \
+        with patch("app.models.vehicle.VehicleModel.find_by_number", return_value=VEHICLE), \
              patch("app.models.pump.PumpModel.get_by_id", return_value=PUMP), \
              patch("app.models.pump_employee.PumpEmployeeModel.exists", return_value=False):
             res = client.post("/api/transactions/", json=TRANSACTION_PAYLOAD,
                               headers={"Authorization": f"Bearer {employee_token}"})
         assert res.status_code == 403
 
-    def test_forbidden_customer(self, client, customer_token):
-        res = client.post("/api/transactions/", json=TRANSACTION_PAYLOAD,
-                          headers={"Authorization": f"Bearer {customer_token}"})
-        assert res.status_code == 403
-
     def test_no_token(self, client):
         res = client.post("/api/transactions/", json=TRANSACTION_PAYLOAD)
         assert res.status_code == 401
 
-    def test_vehicle_not_found(self, client, admin_token):
-        with patch("app.models.vehicle.VehicleModel.get_by_id", return_value=None):
-            res = client.post("/api/transactions/", json=TRANSACTION_PAYLOAD,
-                              headers={"Authorization": f"Bearer {admin_token}"})
-        assert res.status_code == 404
-        assert "Vehicle not found" in res.get_json()["message"]
-
     def test_pump_not_found(self, client, admin_token):
-        with patch("app.models.vehicle.VehicleModel.get_by_id", return_value=VEHICLE), \
+        with patch("app.models.vehicle.VehicleModel.find_by_number", return_value=VEHICLE), \
              patch("app.models.pump.PumpModel.get_by_id", return_value=None):
             res = client.post("/api/transactions/", json=TRANSACTION_PAYLOAD,
                               headers={"Authorization": f"Bearer {admin_token}"})
@@ -97,7 +96,7 @@ class TestCreateTransaction:
         assert "Pump not found" in res.get_json()["message"]
 
     def test_no_active_fuel_price(self, client, admin_token):
-        with patch("app.models.vehicle.VehicleModel.get_by_id", return_value=VEHICLE), \
+        with patch("app.models.vehicle.VehicleModel.find_by_number", return_value=VEHICLE), \
              patch("app.models.pump.PumpModel.get_by_id", return_value=PUMP), \
              patch("app.models.fuel_price.FuelPriceModel.get_latest", return_value=None), \
              patch("app.routes.transaction.mongo_client", mock_session()):
@@ -125,7 +124,7 @@ class TestCreateTransaction:
                           headers={"Authorization": f"Bearer {admin_token}"})
         assert res.status_code == 400
         errors = res.get_json()["errors"]
-        assert "vehicle_id" in errors
+        assert "vehicle_number" in errors
         assert "pump_id" in errors
         assert "fuel_type" in errors
         assert "quantity" in errors
@@ -133,7 +132,7 @@ class TestCreateTransaction:
     def test_all_fuel_types_valid(self, client, admin_token):
         for ftype in ["octane", "diesel", "petrol"]:
             payload = {**TRANSACTION_PAYLOAD, "fuel_type": ftype}
-            with patch("app.models.vehicle.VehicleModel.get_by_id", return_value=VEHICLE), \
+            with patch("app.models.vehicle.VehicleModel.find_by_number", return_value=VEHICLE), \
                  patch("app.models.pump.PumpModel.get_by_id", return_value=PUMP), \
                  patch("app.models.fuel_price.FuelPriceModel.get_latest", return_value={**FUEL_PRICE, "fuel_type": ftype}), \
                  patch("app.models.transaction.TransactionModel.create", return_value=TRANSACTION), \
@@ -143,9 +142,8 @@ class TestCreateTransaction:
             assert res.status_code == 201, f"fuel_type '{ftype}' should be valid"
 
     def test_total_price_matches_succeeds(self, client, admin_token):
-        # quantity=10.0, price_per_unit=125.0 → total_price=1250.0
         payload = {**TRANSACTION_PAYLOAD, "total_price": 1250.0}
-        with patch("app.models.vehicle.VehicleModel.get_by_id", return_value=VEHICLE), \
+        with patch("app.models.vehicle.VehicleModel.find_by_number", return_value=VEHICLE), \
              patch("app.models.pump.PumpModel.get_by_id", return_value=PUMP), \
              patch("app.models.fuel_price.FuelPriceModel.get_latest", return_value=FUEL_PRICE), \
              patch("app.models.transaction.TransactionModel.create", return_value=TRANSACTION), \
@@ -155,9 +153,8 @@ class TestCreateTransaction:
         assert res.status_code == 201
 
     def test_total_price_mismatch_rejected(self, client, admin_token):
-        # quantity=10.0, price_per_unit=125.0 → expected 1250.0, submitting 999.0
         payload = {**TRANSACTION_PAYLOAD, "total_price": 999.0}
-        with patch("app.models.vehicle.VehicleModel.get_by_id", return_value=VEHICLE), \
+        with patch("app.models.vehicle.VehicleModel.find_by_number", return_value=VEHICLE), \
              patch("app.models.pump.PumpModel.get_by_id", return_value=PUMP), \
              patch("app.models.fuel_price.FuelPriceModel.get_latest", return_value=FUEL_PRICE), \
              patch("app.routes.transaction.mongo_client", mock_session()):
@@ -167,8 +164,7 @@ class TestCreateTransaction:
         assert "mismatch" in res.get_json()["message"].lower()
 
     def test_total_price_omitted_still_succeeds(self, client, admin_token):
-        # total_price is optional — omitting it works fine
-        with patch("app.models.vehicle.VehicleModel.get_by_id", return_value=VEHICLE), \
+        with patch("app.models.vehicle.VehicleModel.find_by_number", return_value=VEHICLE), \
              patch("app.models.pump.PumpModel.get_by_id", return_value=PUMP), \
              patch("app.models.fuel_price.FuelPriceModel.get_latest", return_value=FUEL_PRICE), \
              patch("app.models.transaction.TransactionModel.create", return_value=TRANSACTION), \
@@ -178,7 +174,6 @@ class TestCreateTransaction:
         assert res.status_code == 201
 
     def test_total_price_too_low_rejected(self, client, admin_token):
-        # total_price below schema minimum (0.01)
         payload = {**TRANSACTION_PAYLOAD, "total_price": 0.0}
         res = client.post("/api/transactions/", json=payload,
                           headers={"Authorization": f"Bearer {admin_token}"})
@@ -213,18 +208,6 @@ class TestGetTransaction:
         assert "unit" in data
         assert "currency" in data
 
-    def test_success_as_vehicle_owner(self, client, customer_token):
-        # customer_token user_id is "user-3"
-        own_vehicle = {**VEHICLE, "user_id": "user-3"}
-        txn = {**TRANSACTION}
-        with patch("app.models.transaction.TransactionModel.get_by_id", return_value=txn), \
-             patch("app.models.vehicle.VehicleModel.get_by_id", return_value=own_vehicle), \
-             patch("app.models.pump.PumpModel.get_by_id", return_value=PUMP), \
-             patch("app.models.fuel_price.FuelPriceModel.get_by_id", return_value=FUEL_PRICE):
-            res = client.get("/api/transactions/txn-1",
-                             headers={"Authorization": f"Bearer {customer_token}"})
-        assert res.status_code == 200
-
     def test_success_as_pump_employee(self, client, employee_token):
         txn = {**TRANSACTION}
         with patch("app.models.transaction.TransactionModel.get_by_id", return_value=txn), \
@@ -236,14 +219,12 @@ class TestGetTransaction:
                              headers={"Authorization": f"Bearer {employee_token}"})
         assert res.status_code == 200
 
-    def test_forbidden_unrelated_user(self, client, customer_token):
-        # customer_token user_id is "user-3", vehicle belongs to "user-1"
+    def test_forbidden_unrelated_employee(self, client, employee_token):
         txn = {**TRANSACTION}
         with patch("app.models.transaction.TransactionModel.get_by_id", return_value=txn), \
-             patch("app.models.vehicle.VehicleModel.get_by_id", return_value=VEHICLE), \
              patch("app.models.pump_employee.PumpEmployeeModel.exists", return_value=False):
             res = client.get("/api/transactions/txn-1",
-                             headers={"Authorization": f"Bearer {customer_token}"})
+                             headers={"Authorization": f"Bearer {employee_token}"})
         assert res.status_code == 403
 
     def test_not_found(self, client, admin_token):
@@ -349,11 +330,6 @@ class TestGetAllTransactions:
                          headers={"Authorization": f"Bearer {employee_token}"})
         assert res.status_code == 403
 
-    def test_forbidden_customer(self, client, customer_token):
-        res = client.get("/api/transactions/",
-                         headers={"Authorization": f"Bearer {customer_token}"})
-        assert res.status_code == 403
-
     def test_invalid_limit(self, client, admin_token):
         res = client.get("/api/transactions/?limit=abc",
                          headers={"Authorization": f"Bearer {admin_token}"})
@@ -370,21 +346,13 @@ class TestGetTransactionsByVehicle:
         assert res.status_code == 200
         assert len(res.get_json()["data"]["transactions"]) == 1
 
-    def test_success_as_vehicle_owner(self, client, customer_token):
-        own_vehicle = {**VEHICLE, "user_id": "user-3"}
+    def test_success_as_employee(self, client, employee_token):
         txns = [TRANSACTION]
-        with patch("app.models.vehicle.VehicleModel.get_by_id", return_value=own_vehicle), \
+        with patch("app.models.vehicle.VehicleModel.get_by_id", return_value=VEHICLE), \
              patch("app.services.transaction_service.TransactionService.get_filtered", return_value=(txns, None, False)):
             res = client.get("/api/transactions/vehicle/veh-1",
-                             headers={"Authorization": f"Bearer {customer_token}"})
+                             headers={"Authorization": f"Bearer {employee_token}"})
         assert res.status_code == 200
-
-    def test_forbidden_other_user(self, client, customer_token):
-        # customer_token user_id "user-3", vehicle belongs to "user-1"
-        with patch("app.models.vehicle.VehicleModel.get_by_id", return_value=VEHICLE):
-            res = client.get("/api/transactions/vehicle/veh-1",
-                             headers={"Authorization": f"Bearer {customer_token}"})
-        assert res.status_code == 403
 
     def test_filter_by_fuel_type(self, client, admin_token):
         txns = [TRANSACTION]
@@ -483,14 +451,6 @@ class TestGetTransactionsByPump:
              patch("app.models.pump_employee.PumpEmployeeModel.exists", return_value=False):
             res = client.get("/api/transactions/pump/pump-1",
                              headers={"Authorization": f"Bearer {employee_token}"})
-        assert res.status_code == 403
-
-    def test_forbidden_customer(self, client, customer_token):
-        with patch("app.models.pump.PumpModel.get_by_id", return_value=PUMP), \
-             patch("app.models.pump_employee.PumpEmployeeModel.is_pump_admin", return_value=False), \
-             patch("app.models.pump_employee.PumpEmployeeModel.exists", return_value=False):
-            res = client.get("/api/transactions/pump/pump-1",
-                             headers={"Authorization": f"Bearer {customer_token}"})
         assert res.status_code == 403
 
     def test_filter_by_fuel_type(self, client, admin_token):

@@ -28,10 +28,6 @@ class TestGetMyPumps:
                              headers={"Authorization": f"Bearer {admin_token}"})
         assert res.status_code == 200
 
-    def test_forbidden_customer(self, client, customer_token):
-        res = client.get("/api/pumps/me/pumps",
-                         headers={"Authorization": f"Bearer {customer_token}"})
-        assert res.status_code == 403
 
     def test_no_token(self, client):
         res = client.get("/api/pumps/me/pumps")
@@ -80,13 +76,6 @@ class TestAddEmployee:
                               headers={"Authorization": f"Bearer {employee_token}"})
         assert res.status_code == 403
 
-    def test_forbidden_customer(self, client, customer_token):
-        with patch("app.models.pump.PumpModel.get_by_id", return_value=PUMP), \
-             patch("app.models.pump_employee.PumpEmployeeModel.is_pump_admin", return_value=False):
-            res = client.post("/api/pumps/pump-1/employees",
-                              json={"email": "emp@test.com", "role": "employee"},
-                              headers={"Authorization": f"Bearer {customer_token}"})
-        assert res.status_code == 403
 
     def test_no_token(self, client):
         res = client.post("/api/pumps/pump-1/employees",
@@ -128,9 +117,9 @@ class TestAddEmployee:
         assert res.status_code == 409
 
     def test_user_not_employee_role(self, client, admin_token):
-        customer = {**USER, "role": "customer"}
+        admin_user = {**USER, "role": "admin"}
         with patch("app.models.pump.PumpModel.get_by_id", return_value=PUMP), \
-             patch("app.models.user.UserModel.get_by_email", return_value=customer), \
+             patch("app.models.user.UserModel.get_by_email", return_value=admin_user), \
              patch("app.models.pump_employee.PumpEmployeeModel.exists", return_value=False), \
              patch("app.models.pump_employee.PumpEmployeeModel.is_assigned_anywhere", return_value=False):
             res = client.post("/api/pumps/pump-1/employees",
@@ -346,13 +335,6 @@ class TestGetEmployees:
              patch("app.models.pump_employee.PumpEmployeeModel.exists", return_value=False):
             res = client.get("/api/pumps/pump-1/employees",
                              headers={"Authorization": f"Bearer {employee_token}"})
-        assert res.status_code == 403
-
-    def test_forbidden_customer(self, client, customer_token):
-        with patch("app.models.pump.PumpModel.get_by_id", return_value=PUMP), \
-             patch("app.models.pump_employee.PumpEmployeeModel.exists", return_value=False):
-            res = client.get("/api/pumps/pump-1/employees",
-                             headers={"Authorization": f"Bearer {customer_token}"})
         assert res.status_code == 403
 
     def test_no_token(self, client):

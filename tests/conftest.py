@@ -39,6 +39,3 @@ def pump_admin_token(app):
 def employee_token(app):
     return jwt.encode({"user_id": "user-2", "role": "employee"}, app.config["JWT_SECRET_KEY"], algorithm="HS256")
 
-@pytest.fixture
-def customer_token(app):
-    return jwt.encode({"user_id": "user-3", "role": "customer"}, app.config["JWT_SECRET_KEY"], algorithm="HS256")

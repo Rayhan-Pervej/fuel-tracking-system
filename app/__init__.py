@@ -23,7 +23,6 @@ def _create_indexes():
     mongo.db["transactions"].create_index("vehicle_id")
     mongo.db["transactions"].create_index("pump_id")
     mongo.db["transactions"].create_index("created_at")
-    mongo.db["vehicles"].create_index("user_id")
     mongo.db["fuel_prices"].create_index("fuel_type")
     mongo.db["users"].create_index("email", unique=True, sparse=True)
     mongo.db["vehicles"].create_index("vehicle_number", unique=True)

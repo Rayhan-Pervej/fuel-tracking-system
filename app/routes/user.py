@@ -5,7 +5,6 @@ from app.schemas.user import UserSchema, UserUpdateSchema
 from app.services.user_service import UserService
 from app.constants import get_cursor_params, success_response, created_response, cursor_response, error_response
 from app.middleware.auth import require_auth, require_role
-from app.models.vehicle import VehicleModel
 from app.models.pump_employee import PumpEmployeeModel
 
 user_bp = Blueprint("user", __name__)
@@ -104,7 +103,6 @@ def delete_user(user_id):
     if not user:
         return jsonify(error_response(404, "User not found")), 404
 
-    VehicleModel.delete_by_user(user_id)
     PumpEmployeeModel.remove_by_user(user_id)
     UserModel.delete(user_id)
     return jsonify(success_response("User deleted successfully", {})), 200

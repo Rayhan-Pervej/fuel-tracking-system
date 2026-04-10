@@ -26,8 +26,9 @@ def create_transaction():
     except ValidationError as e:
         return jsonify(error_response(400, "Validation failed", errors=e.messages)), 400
 
-    if not VehicleModel.get_by_id(data['vehicle_id']):
-        return jsonify(error_response(404, "Vehicle not found")), 404
+    vehicle = VehicleModel.find_by_number(data["vehicle_number"])
+    if not vehicle:
+        vehicle = VehicleModel.create(vehicle_number=data["vehicle_number"])
 
     if not PumpModel.get_by_id(data['pump_id']):
         return jsonify(error_response(404, "Pump not found")), 404
@@ -51,7 +52,7 @@ def create_transaction():
                     return jsonify(error_response(400, f"total_price mismatch: expected {total_price}, got {submitted}")), 400
             
             transaction = TransactionModel.create(
-                vehicle_id=data["vehicle_id"],
+                vehicle_id=vehicle["_id"],
                 pump_id=data["pump_id"],
                 fuel_price_id=fuel_price["_id"],
                 quantity=data["quantity"],
@@ -103,8 +104,6 @@ def get_transactions_by_vehicle(vehicle_id):
     vehicle = VehicleModel.get_by_id(vehicle_id)
     if not vehicle:
         return jsonify(error_response(404, "Vehicle not found")), 404
-    if g.role != "admin" and g.user_id != vehicle["user_id"]:
-        return jsonify(error_response(403, "You can only view transactions for your own vehicles")), 403
 
     from_date = request.args.get("from")
     to_date = request.args.get("to")
@@ -168,12 +167,7 @@ def get_transaction(transaction_id):
     if not transaction:
         return jsonify(error_response(404, "Transaction not found")), 404
     if g.role != "admin":
-        vehicle = VehicleModel.get_by_id(transaction["vehicle_id"])
-        if vehicle and g.user_id == vehicle["user_id"]:
-            pass
-        elif PumpEmployeeModel.exists(transaction["pump_id"], g.user_id):
-            pass
-        else:
+        if not PumpEmployeeModel.exists(transaction["pump_id"], g.user_id):
             return jsonify(error_response(403, "You do not have permission to view this transaction")), 403
     TransactionService.enrich([transaction])
     return jsonify(success_response("Transaction retrieved successfully", {"transaction": transaction})), 200

@@ -17,14 +17,13 @@ class UserModel:
         return UserModel.collection().find_one({"email": email}) is not None
 
     @staticmethod
-    def create(name: str, email: str, password: str, role: str, license: str = None) -> dict:
+    def create(name: str, email: str, password: str, role: str,) -> dict:
         user = {
             "_id": str(uuid.uuid4()),
             "name": name,
             "email": email,
             "password_hash": generate_password_hash(password),
             "role": role,
-            "license": license,
             "created_at": datetime.now(timezone.utc)
         }
         try:

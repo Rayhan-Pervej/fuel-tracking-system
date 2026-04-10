@@ -12,15 +12,13 @@ class VehicleModel:
         return mongo.db[VehicleModel.COLLECTION]
     @staticmethod
     def exists_by_number(vehicle_number: str) -> bool:
-        return VehicleModel.collection().find_one({"vehicle_number": vehicle_number}) is not None
+        return VehicleModel.collection().find_one({"vehicle_number": {"$regex": f"^{vehicle_number}$", "$options": "i"}}) is not None
 
     @staticmethod
-    def create(user_id: str, vehicle_number: str, vehicle_type: str) -> dict:
+    def create(vehicle_number: str,) -> dict:
         vehicle = {
             "_id": str(uuid.uuid4()),
-            "user_id": user_id,
             "vehicle_number": vehicle_number,
-            "vehicle_type": vehicle_type,
             "created_at": datetime.now(timezone.utc)
         }
         try:
@@ -42,10 +40,9 @@ class VehicleModel:
     @staticmethod
     def get_by_id(vehicle_id: str) -> dict:
         return VehicleModel.collection().find_one({"_id": vehicle_id})
-    
     @staticmethod
-    def delete_by_user(user_id: str) -> None:
-        VehicleModel.collection().delete_many({"user_id": user_id})
+    def find_by_number(vehicle_number: str) -> dict:
+        return VehicleModel.collection().find_one({"vehicle_number": {"$regex": f"^{vehicle_number}$", "$options": "i"}})
 
     @staticmethod
     def delete(vehicle_id: str) -> None:

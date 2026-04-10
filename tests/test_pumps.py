@@ -28,11 +28,6 @@ class TestCreatePump:
                           headers={"Authorization": f"Bearer {employee_token}"})
         assert res.status_code == 403
 
-    def test_forbidden_customer(self, client, customer_token):
-        res = client.post("/api/pumps/", json=PUMP_PAYLOAD,
-                          headers={"Authorization": f"Bearer {customer_token}"})
-        assert res.status_code == 403
-
     def test_duplicate_license(self, client, admin_token):
         with patch("app.models.pump.PumpModel.exists_by_license", return_value=True):
             res = client.post("/api/pumps/", json=PUMP_PAYLOAD,
@@ -82,11 +77,6 @@ class TestGetPump:
                              headers={"Authorization": f"Bearer {employee_token}"})
         assert res.status_code == 200
 
-    def test_get_as_customer(self, client, customer_token):
-        with patch("app.models.pump.PumpModel.get_by_id", return_value=PUMP):
-            res = client.get("/api/pumps/pump-1",
-                             headers={"Authorization": f"Bearer {customer_token}"})
-        assert res.status_code == 200
 
     def test_get_nonexistent(self, client, admin_token):
         with patch("app.models.pump.PumpModel.get_by_id", return_value=None):
@@ -108,10 +98,10 @@ class TestGetAllPumps:
         assert res.status_code == 200
         assert len(res.get_json()["data"]["pumps"]) == 1
 
-    def test_accessible_by_any_authenticated_user(self, client, customer_token):
+    def test_accessible_by_any_authenticated_user(self, client, employee_token):
         with patch("app.services.pump_service.PumpService.get_filtered", return_value=([PUMP], None, False)):
             res = client.get("/api/pumps/",
-                             headers={"Authorization": f"Bearer {customer_token}"})
+                             headers={"Authorization": f"Bearer {employee_token}"})
         assert res.status_code == 200
 
     def test_filter_by_location(self, client, admin_token):
@@ -219,10 +209,6 @@ class TestUpdatePump:
                            headers={"Authorization": f"Bearer {employee_token}"})
         assert res.status_code == 403
 
-    def test_forbidden_customer(self, client, customer_token):
-        res = client.patch("/api/pumps/pump-1", json={"location": "Chittagong"},
-                           headers={"Authorization": f"Bearer {customer_token}"})
-        assert res.status_code == 403
 
     def test_empty_body(self, client, admin_token):
         with patch("app.models.pump.PumpModel.get_by_id", return_value=PUMP):
@@ -271,7 +257,3 @@ class TestDeletePump:
                             headers={"Authorization": f"Bearer {employee_token}"})
         assert res.status_code == 403
 
-    def test_forbidden_customer(self, client, customer_token):
-        res = client.delete("/api/pumps/pump-1",
-                            headers={"Authorization": f"Bearer {customer_token}"})
-        assert res.status_code == 403

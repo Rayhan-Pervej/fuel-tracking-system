@@ -3,15 +3,13 @@ from flask import Blueprint, request, jsonify, current_app, g
 from marshmallow import ValidationError
 from app.models.user import UserModel
 from app.schemas.auth import LoginSchema
-from app.schemas.user import UserSchema
-from app.constants import error_response, success_response, created_response
+from app.constants import error_response, success_response
 import jwt
 from datetime import datetime, timezone, timedelta
 from app.extensions import limiter
 from app.middleware.auth import require_auth
 auth_bp = Blueprint("auth", __name__)
 schema = LoginSchema()
-register_schema = UserSchema()
 
 @auth_bp.route('/login', methods=['POST'])
 @limiter.limit("5 per minute")
@@ -44,28 +42,6 @@ def login():
         "refresh_token": refresh_token,
         "token_type": "Bearer"
     })), 200
-
-
-@auth_bp.route('/register', methods=['POST'])
-@limiter.limit("5 per minute")
-def register():
-    try:
-        data = register_schema.load(request.get_json() or {})
-        if data["role"] not in ["customer"]:
-            return jsonify(error_response(403, "Cannot self-register as admin or employee")), 403
-    except ValidationError as e:
-        return jsonify(error_response(400, "Validation failed", errors=e.messages)), 400
-    
-    if UserModel.exists_by_email(data['email']):
-        return jsonify(error_response(409, "User with this email already exists")), 409
-    
-    try:
-        user = UserModel.create(**data)
-    except ValueError as e:
-        return jsonify(error_response(409, str(e))), 409
-    user.pop("password_hash", None)
-
-    return jsonify(created_response("User registered successfully", {"user": user})), 201
 
 
 @auth_bp.route('/refresh', methods=['POST'])
