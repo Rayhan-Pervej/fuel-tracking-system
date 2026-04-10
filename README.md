@@ -1,6 +1,6 @@
 # Fuel Tracking System
 
-A Fuel Tracking System where users can log fuel transactions at specific pumps for their vehicles. It provides a real-time central dashboard that updates instantly using MongoDB Change Streams and Socket.IO. Built with Python Flask for the backend and MongoDB as the database.
+A Fuel Tracking System where employees log fuel transactions at specific pumps for vehicles. It provides a real-time central dashboard that updates instantly using MongoDB Change Streams and Socket.IO. Built with Python Flask for the backend and MongoDB as the database.
 
 ## Tech Stack
 
@@ -77,6 +77,8 @@ Authorization: Bearer <access_token>
 
 Obtain tokens via `POST /api/auth/login`. Access tokens expire after 15 minutes. Use `POST /api/auth/refresh` with your refresh token to get a new access token. Use `POST /api/auth/logout` to invalidate the refresh token.
 
+> There is no self-registration. All user accounts must be created by an admin via `POST /api/users/`.
+
 ---
 
 ## Roles
@@ -84,8 +86,7 @@ Obtain tokens via `POST /api/auth/login`. Access tokens expire after 15 minutes.
 | Role | Scope | Description |
 |------|-------|-------------|
 | `admin` | Global | Full access — create pumps, users, fuel prices, view all data |
-| `employee` | Global | Can record transactions |
-| `customer` | Global | Can register vehicles, self-register |
+| `employee` | Global | Can record transactions, search vehicles |
 | `pump_admin` | Pump-scoped | Can add/remove employees for their assigned pump |
 
 > `pump_admin` is not a global role — it is stored in `pump_employees` collection per pump.
@@ -101,8 +102,7 @@ Obtain tokens via `POST /api/auth/login`. Access tokens expire after 15 minutes.
 | name | string | Full name |
 | email | string | Unique email |
 | password_hash | string | Hashed password (never returned in responses) |
-| role | string | `admin`, `employee`, `customer` |
-| license | string | License number |
+| role | string | `admin` or `employee` |
 | refresh_token | string | Active refresh token (never returned in responses) |
 | refresh_token_expires_at | datetime | Refresh token expiry (never returned in responses) |
 | created_at | datetime | Creation timestamp |
@@ -111,9 +111,7 @@ Obtain tokens via `POST /api/auth/login`. Access tokens expire after 15 minutes.
 | Field | Type | Description |
 |-------|------|-------------|
 | _id | string (uuid) | Primary key |
-| user_id | string | FK → User |
-| vehicle_number | string | Unique plate number |
-| vehicle_type | string | `car`, `truck`, `bike`, `bus` |
+| vehicle_number | string | Unique plate number (case-insensitive) |
 | created_at | datetime | Creation timestamp |
 
 ### Pump
@@ -167,11 +165,10 @@ Obtain tokens via `POST /api/auth/login`. Access tokens expire after 15 minutes.
 ## Relations
 
 ```
-User            ──< Vehicle
-User            ──< PumpEmployee
 Vehicle         ──< Transaction
 Pump            ──< Transaction
 Pump            ──< PumpEmployee
+User            ──< PumpEmployee
 FuelPrice       ──< Transaction
 ```
 
@@ -264,46 +261,23 @@ Invalidate the refresh token.
 
 ---
 
-#### `POST /api/auth/register`
-Self-register as a customer.
-
-**Auth required:** No
-
-**Request body:**
-```json
-{ "name": "John Doe", "email": "user@example.com", "password": "secret123", "license": "DH-1234" }
-```
-
-**Validation:**
-- `name`: required, 2–100 characters
-- `email`: required, valid email format
-- `password`: required, minimum 8 characters
-- `license`: required, 3–10 characters
-
-> Role is always `customer` — admin/employee accounts must be created via `POST /api/users/`.
-
-**Responses:** `201` / `400` / `403 Cannot self-register as admin or employee` / `409 Email already exists`
-
----
-
 ### Users
 
 #### `POST /api/users/`
-Create a new user (admin or employee).
+Create a new user.
 
 **Auth required:** `admin`
 
 **Request body:**
 ```json
-{ "name": "John Doe", "email": "user@example.com", "password": "secret123", "role": "employee", "license": "DH-1234" }
+{ "name": "John Doe", "email": "user@example.com", "password": "secret123", "role": "employee" }
 ```
 
 **Validation:**
 - `name`: required, 2–100 characters
 - `email`: required, valid email format
 - `password`: required, minimum 8 characters
-- `role`: optional, defaults to `customer` — one of `admin`, `employee`, `customer`
-- `license`: required, 3–10 characters
+- `role`: optional, defaults to `employee` — one of `admin`, `employee`
 
 **Responses:** `201` / `400` / `401` / `403` / `409 Email already exists`
 
@@ -320,7 +294,7 @@ Get all users (paginated).
 |-------|------|----------|-------------|
 | `limit` | int | No | Page size (default: 10, max: 100) |
 | `cursor` | string | No | Opaque cursor from previous response |
-| `role` | string | No | Filter by role: `admin`, `employee`, `customer` |
+| `role` | string | No | Filter by role: `admin`, `employee` |
 | `email` | string | No | Filter by email (partial match, case-insensitive) |
 
 **Responses:** `200` / `400` / `401` / `403`
@@ -350,19 +324,18 @@ Update a user.
 
 **Auth required:** `admin`
 
-**Request body:** Any subset of `name`, `license`, `role`
+**Request body:** Any subset of `name`, `role`
 
 **Validation:**
 - `name`: 2–100 characters
-- `license`: 3–10 characters
-- `role`: one of `admin`, `employee`, `customer`
+- `role`: one of `admin`, `employee`
 
 **Responses:** `200` / `400` / `401` / `403` / `404`
 
 ---
 
 #### `DELETE /api/users/<user_id>`
-Delete a user and cascade-delete their vehicles and pump assignments.
+Delete a user and cascade-delete their pump assignments.
 
 **Auth required:** `admin`
 
@@ -375,16 +348,17 @@ Delete a user and cascade-delete their vehicles and pump assignments.
 #### `POST /api/vehicles/`
 Create a new vehicle.
 
-**Auth required:** Any authenticated user
-
-> Non-admin users can only create vehicles for themselves (`user_id` must match their own ID).
+**Auth required:** Any authenticated user (`admin` or `employee`)
 
 **Request body:**
 ```json
-{ "user_id": "...", "vehicle_number": "DH-1234", "vehicle_type": "car" }
+{ "vehicle_number": "DH-1234" }
 ```
 
-**Responses:** `201` / `400` / `401` / `403` / `404 User not found` / `409 Vehicle number already exists`
+**Validation:**
+- `vehicle_number`: required, 2–10 characters
+
+**Responses:** `201` / `400` / `401` / `409 Vehicle number already exists`
 
 ---
 
@@ -399,8 +373,6 @@ Get all vehicles (paginated).
 |-------|------|----------|-------------|
 | `limit` | int | No | Page size (default: 10, max: 100) |
 | `cursor` | string | No | Opaque cursor from previous response |
-| `user_email` | string | No | Filter by owner email (exact match) |
-| `type` | string | No | Filter by vehicle type: `car`, `truck`, `bike`, `bus` |
 | `search` | string | No | Partial, case-insensitive match on `vehicle_number` |
 
 **Responses:** `200` / `400` / `401` / `403`
@@ -412,14 +384,12 @@ Get a single vehicle by ID.
 
 **Auth required:** Any authenticated user
 
-> Non-admin users can only view their own vehicles.
-
-**Responses:** `200` / `401` / `403` / `404`
+**Responses:** `200` / `401` / `404`
 
 ---
 
 #### `GET /api/vehicles/search`
-Search vehicles by number across all users.
+Search vehicles by number (for autocomplete).
 
 **Auth required:** `admin` or `employee`
 
@@ -428,37 +398,21 @@ Search vehicles by number across all users.
 | Param | Type | Required | Description |
 |-------|------|----------|-------------|
 | `q` | string | Yes | Partial, case-insensitive match on `vehicle_number` |
-| `limit` | int | No | Page size (default: 10, max: 100) |
+| `limit` | int | No | Max results (default: 10, max: 100) |
 
 **Responses:** `200` / `400 Missing q` / `401` / `403`
-
----
-
-#### `GET /api/vehicles/user/<user_id>`
-Get all vehicles for a user (paginated).
-
-**Auth required:** Any authenticated user
-
-> Non-admin users can only view vehicles for their own user ID.
-
-**Query params:**
-
-| Param | Type | Required | Description |
-|-------|------|----------|-------------|
-| `limit` | int | No | Page size (default: 10, max: 100) |
-| `cursor` | string | No | Opaque cursor from previous response |
-| `search` | string | No | Partial, case-insensitive match on `vehicle_number` |
-
-**Responses:** `200` / `400` / `401` / `403` / `404 User not found`
 
 ---
 
 #### `PATCH /api/vehicles/<vehicle_id>`
 Update a vehicle.
 
-**Auth required:** Any authenticated user (admin or the vehicle's owner)
+**Auth required:** `admin`
 
-**Request body:** Any subset of `vehicle_number`, `vehicle_type`
+**Request body:** Any subset of `vehicle_number`
+
+**Validation:**
+- `vehicle_number`: 2–10 characters
 
 **Responses:** `200` / `400` / `401` / `403` / `404`
 
@@ -467,7 +421,7 @@ Update a vehicle.
 #### `DELETE /api/vehicles/<vehicle_id>`
 Delete a vehicle.
 
-**Auth required:** Any authenticated user (admin or the vehicle's owner)
+**Auth required:** `admin`
 
 **Responses:** `200` / `401` / `403` / `404`
 
@@ -570,7 +524,7 @@ Remove an employee from a pump.
 
 **Auth required:** Global `admin` OR `pump_admin` of this pump
 
-> Cannot remove the `pump_admin` — reassign their role first.
+> `pump_admin` cannot remove another `pump_admin` — admin must do it.
 
 **Responses:** `200` / `400` / `401` / `403` / `404`
 
@@ -680,12 +634,12 @@ Get the latest active price for a fuel type.
 #### `POST /api/transactions/`
 Record a fuel transaction.
 
-**Auth required:** `admin` or `employee`
+**Auth required:** `admin` or `employee` assigned to the pump
 
 **Request body:**
 ```json
 {
-  "vehicle_id": "...",
+  "vehicle_number": "DH-1234",
   "pump_id": "...",
   "fuel_type": "octane",
   "quantity": 10.0,
@@ -694,15 +648,16 @@ Record a fuel transaction.
 ```
 
 **Validation:**
-- `vehicle_id`: required
+- `vehicle_number`: required, 2–10 characters
 - `pump_id`: required
 - `fuel_type`: required, one of `octane`, `diesel`, `petrol`
 - `quantity`: required, minimum `0.1`
 - `total_price`: optional, minimum `0.01` — if provided, must match `quantity × latest price_per_unit` (rounded to 2 decimal places); mismatch returns `400`
 
-> `total_price` is calculated server-side as `quantity × latest price_per_unit` (rounded to 2 decimal places, using `ROUND_HALF_UP`). If the client submits `total_price`, the server verifies it matches the calculated value before saving. Uses a MongoDB transaction for atomicity.
+> The vehicle is resolved by `vehicle_number` (case-insensitive). If no matching vehicle exists, one is automatically created.
+> `total_price` is calculated server-side as `quantity × latest price_per_unit` (ROUND_HALF_UP to 2 decimal places). Uses a MongoDB transaction for atomicity.
 
-**Responses:** `201` / `400` / `401` / `403` / `404 Vehicle/Pump/FuelPrice not found`
+**Responses:** `201` / `400` / `401` / `403` / `404 Pump/FuelPrice not found`
 
 ---
 
@@ -721,8 +676,8 @@ Get all transactions (paginated).
 | `pump_name` | string | No | Filter by pump name (partial match, case-insensitive) |
 | `pump_license` | string | No | Filter by pump license (exact match) |
 | `fuel_type` | string | No | Filter by fuel type: `octane`, `diesel`, `petrol` |
-| `from` | string | No | Start date filter `YYYY-MM-DD` (requires `to`) |
-| `to` | string | No | End date filter `YYYY-MM-DD` (requires `from`) |
+| `from` | string | No | Start date filter `YYYY-MM-DD`. If omitted, defaults to `2000-01-01` |
+| `to` | string | No | End date filter `YYYY-MM-DD`. If omitted, defaults to today |
 
 **Responses:** `200` / `400` / `401` / `403`
 
@@ -733,9 +688,7 @@ Get all transactions (paginated).
 #### `GET /api/transactions/<transaction_id>`
 Get a single transaction by ID.
 
-**Auth required:** Any authenticated user
-
-> Non-admin users can only view transactions for their own vehicles or pumps they are assigned to.
+**Auth required:** `admin` or pump employee assigned to the transaction's pump
 
 **Responses:** `200` / `401` / `403` / `404`
 
@@ -746,8 +699,6 @@ Get all transactions for a vehicle (paginated).
 
 **Auth required:** Any authenticated user
 
-> Non-admin users can only view transactions for their own vehicles.
-
 **Query params:**
 
 | Param | Type | Required | Description |
@@ -755,10 +706,10 @@ Get all transactions for a vehicle (paginated).
 | `limit` | int | No | Page size (default: 10, max: 100) |
 | `cursor` | string | No | Opaque cursor from previous response |
 | `fuel_type` | string | No | Filter by fuel type: `octane`, `diesel`, `petrol` |
-| `from` | string | No | Start date filter `YYYY-MM-DD` (requires `to`) |
-| `to` | string | No | End date filter `YYYY-MM-DD` (requires `from`) |
+| `from` | string | No | Start date filter `YYYY-MM-DD`. If omitted, defaults to `2000-01-01` |
+| `to` | string | No | End date filter `YYYY-MM-DD`. If omitted, defaults to today |
 
-**Responses:** `200` / `400` / `401` / `403` / `404 Vehicle not found`
+**Responses:** `200` / `400` / `401` / `404 Vehicle not found`
 
 ---
 
@@ -774,8 +725,8 @@ Get all transactions for a pump (paginated).
 | `limit` | int | No | Page size (default: 10, max: 100) |
 | `cursor` | string | No | Opaque cursor from previous response |
 | `fuel_type` | string | No | Filter by fuel type: `octane`, `diesel`, `petrol` |
-| `from` | string | No | Start date filter `YYYY-MM-DD` (requires `to`) |
-| `to` | string | No | End date filter `YYYY-MM-DD` (requires `from`) |
+| `from` | string | No | Start date filter `YYYY-MM-DD`. If omitted, defaults to `2000-01-01` |
+| `to` | string | No | End date filter `YYYY-MM-DD`. If omitted, defaults to today |
 
 **Responses:** `200` / `400` / `401` / `403` / `404 Pump not found`
 
@@ -842,7 +793,6 @@ Transactions in both `init` and `new_transaction` events are enriched server-sid
 |------------|----------|------|
 | users | email | unique |
 | vehicles | vehicle_number | unique |
-| vehicles | user_id | index |
 | pumps | license | unique |
 | pump_employees | (pump_id, user_id) | unique compound |
 | fuel_prices | fuel_type | index |

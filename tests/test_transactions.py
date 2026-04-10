@@ -282,15 +282,17 @@ class TestGetAllTransactions:
         assert res.status_code == 200
         mock_svc.assert_called_once()
 
-    def test_date_from_without_to_rejected(self, client, admin_token):
-        res = client.get("/api/transactions/?from=2025-01-01",
-                         headers={"Authorization": f"Bearer {admin_token}"})
-        assert res.status_code == 400
+    def test_from_without_to_defaults_to_today(self, client, admin_token):
+        with patch("app.services.transaction_service.TransactionService.get_filtered", return_value=([TRANSACTION], None, False)):
+            res = client.get("/api/transactions/?from=2025-01-01",
+                             headers={"Authorization": f"Bearer {admin_token}"})
+        assert res.status_code == 200
 
-    def test_date_to_without_from_rejected(self, client, admin_token):
-        res = client.get("/api/transactions/?to=2025-12-31",
-                         headers={"Authorization": f"Bearer {admin_token}"})
-        assert res.status_code == 400
+    def test_to_without_from_defaults_to_min_date(self, client, admin_token):
+        with patch("app.services.transaction_service.TransactionService.get_filtered", return_value=([TRANSACTION], None, False)):
+            res = client.get("/api/transactions/?to=2025-12-31",
+                             headers={"Authorization": f"Bearer {admin_token}"})
+        assert res.status_code == 200
 
     def test_invalid_date_format(self, client, admin_token):
         res = client.get("/api/transactions/?from=01-01-2025&to=12-31-2025",
@@ -372,17 +374,19 @@ class TestGetTransactionsByVehicle:
         assert res.status_code == 200
         mock_svc.assert_called_once()
 
-    def test_date_from_without_to_rejected(self, client, admin_token):
-        with patch("app.models.vehicle.VehicleModel.get_by_id", return_value=VEHICLE):
+    def test_from_without_to_defaults_to_today(self, client, admin_token):
+        with patch("app.models.vehicle.VehicleModel.get_by_id", return_value=VEHICLE), \
+             patch("app.services.transaction_service.TransactionService.get_filtered", return_value=([TRANSACTION], None, False)):
             res = client.get("/api/transactions/vehicle/veh-1?from=2025-01-01",
                              headers={"Authorization": f"Bearer {admin_token}"})
-        assert res.status_code == 400
+        assert res.status_code == 200
 
-    def test_date_to_without_from_rejected(self, client, admin_token):
-        with patch("app.models.vehicle.VehicleModel.get_by_id", return_value=VEHICLE):
+    def test_to_without_from_defaults_to_min_date(self, client, admin_token):
+        with patch("app.models.vehicle.VehicleModel.get_by_id", return_value=VEHICLE), \
+             patch("app.services.transaction_service.TransactionService.get_filtered", return_value=([TRANSACTION], None, False)):
             res = client.get("/api/transactions/vehicle/veh-1?to=2025-12-31",
                              headers={"Authorization": f"Bearer {admin_token}"})
-        assert res.status_code == 400
+        assert res.status_code == 200
 
     def test_invalid_date_format(self, client, admin_token):
         with patch("app.models.vehicle.VehicleModel.get_by_id", return_value=VEHICLE):
@@ -471,17 +475,19 @@ class TestGetTransactionsByPump:
         assert res.status_code == 200
         mock_svc.assert_called_once()
 
-    def test_date_from_without_to_rejected(self, client, admin_token):
-        with patch("app.models.pump.PumpModel.get_by_id", return_value=PUMP):
+    def test_from_without_to_defaults_to_today(self, client, admin_token):
+        with patch("app.models.pump.PumpModel.get_by_id", return_value=PUMP), \
+             patch("app.services.transaction_service.TransactionService.get_filtered", return_value=([TRANSACTION], None, False)):
             res = client.get("/api/transactions/pump/pump-1?from=2025-01-01",
                              headers={"Authorization": f"Bearer {admin_token}"})
-        assert res.status_code == 400
+        assert res.status_code == 200
 
-    def test_date_to_without_from_rejected(self, client, admin_token):
-        with patch("app.models.pump.PumpModel.get_by_id", return_value=PUMP):
+    def test_to_without_from_defaults_to_min_date(self, client, admin_token):
+        with patch("app.models.pump.PumpModel.get_by_id", return_value=PUMP), \
+             patch("app.services.transaction_service.TransactionService.get_filtered", return_value=([TRANSACTION], None, False)):
             res = client.get("/api/transactions/pump/pump-1?to=2025-12-31",
                              headers={"Authorization": f"Bearer {admin_token}"})
-        assert res.status_code == 400
+        assert res.status_code == 200
 
     def test_invalid_date_format(self, client, admin_token):
         with patch("app.models.pump.PumpModel.get_by_id", return_value=PUMP):

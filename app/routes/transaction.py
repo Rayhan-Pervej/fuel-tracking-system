@@ -8,13 +8,37 @@ from app.schemas.transaction import TransactionSchema
 from app.services.transaction_service import TransactionService
 from app.constants import get_cursor_params, success_response, created_response, cursor_response, error_response
 from app.middleware.auth import require_auth, require_role
-from datetime import datetime
+from datetime import datetime, timezone
 from decimal import Decimal, ROUND_HALF_UP
 from app.extensions import mongo_client
 from app.models.pump_employee import PumpEmployeeModel
 
 transaction_bp = Blueprint("transaction", __name__)
 schema = TransactionSchema()
+
+DATE_MIN = "2000-01-01"
+
+
+def _resolve_date_range(from_date, to_date):
+    """
+    Apply frontend defaulting rules and validate format.
+    Returns (from_date, to_date, error_response_or_None).
+    """
+    if not from_date and not to_date:
+        return None, None, None
+
+    if from_date and not to_date:
+        to_date = datetime.now(timezone.utc).strftime("%Y-%m-%d")
+    elif to_date and not from_date:
+        from_date = DATE_MIN
+
+    try:
+        datetime.strptime(from_date, "%Y-%m-%d")
+        datetime.strptime(to_date, "%Y-%m-%d")
+    except ValueError:
+        return None, None, "Dates must be in YYYY-MM-DD format"
+
+    return from_date, to_date, None
 
 
 @transaction_bp.route('/', methods=['POST'])
@@ -71,18 +95,9 @@ def get_transactions():
     if limit is None:
         return jsonify(error_response(400, "Invalid pagination parameters")), 400
 
-    from_date = request.args.get("from")
-    to_date = request.args.get("to")
-
-    if (from_date and not to_date) or (to_date and not from_date):
-        return jsonify(error_response(400, "Both 'from' and 'to' are required for date filtering")), 400
-
-    if from_date:
-        try:
-            datetime.strptime(from_date, "%Y-%m-%d")
-            datetime.strptime(to_date, "%Y-%m-%d")
-        except ValueError:
-            return jsonify(error_response(400, "Dates must be in YYYY-MM-DD format")), 400
+    from_date, to_date, err = _resolve_date_range(request.args.get("from"), request.args.get("to"))
+    if err:
+        return jsonify(error_response(400, err)), 400
 
     transactions, next_cursor, has_more = TransactionService.get_filtered(
         from_date=from_date,
@@ -105,16 +120,9 @@ def get_transactions_by_vehicle(vehicle_id):
     if not vehicle:
         return jsonify(error_response(404, "Vehicle not found")), 404
 
-    from_date = request.args.get("from")
-    to_date = request.args.get("to")
-    if (from_date and not to_date) or (to_date and not from_date):
-        return jsonify(error_response(400, "Both 'from' and 'to' are required for date filtering")), 400
-    if from_date:
-        try:
-            datetime.strptime(from_date, "%Y-%m-%d")
-            datetime.strptime(to_date, "%Y-%m-%d")
-        except ValueError:
-            return jsonify(error_response(400, "Dates must be in YYYY-MM-DD format")), 400
+    from_date, to_date, err = _resolve_date_range(request.args.get("from"), request.args.get("to"))
+    if err:
+        return jsonify(error_response(400, err)), 400
 
     cursor, limit = get_cursor_params(request)
     if limit is None:
@@ -137,16 +145,10 @@ def get_transactions_by_pump(pump_id):
     if g.role != "admin" and not PumpEmployeeModel.is_pump_admin(pump_id, g.user_id):
         if not PumpEmployeeModel.exists(pump_id, g.user_id):
             return jsonify(error_response(403, "You can only view transactions for pumps you work at")), 403
-    from_date = request.args.get("from")
-    to_date = request.args.get("to")
-    if (from_date and not to_date) or (to_date and not from_date):
-        return jsonify(error_response(400, "Both 'from' and 'to' are required for date filtering")), 400
-    if from_date:
-        try:
-            datetime.strptime(from_date, "%Y-%m-%d")
-            datetime.strptime(to_date, "%Y-%m-%d")
-        except ValueError:
-            return jsonify(error_response(400, "Dates must be in YYYY-MM-DD format")), 400
+    from_date, to_date, err = _resolve_date_range(request.args.get("from"), request.args.get("to"))
+    if err:
+        return jsonify(error_response(400, err)), 400
+
     cursor, limit = get_cursor_params(request)
     if limit is None:
         return jsonify(error_response(400, "Invalid pagination parameters")), 400
