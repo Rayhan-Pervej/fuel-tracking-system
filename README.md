@@ -688,7 +688,8 @@ Record a fuel transaction.
   "vehicle_id": "...",
   "pump_id": "...",
   "fuel_type": "octane",
-  "quantity": 10.0
+  "quantity": 10.0,
+  "total_price": 1250.0
 }
 ```
 
@@ -697,8 +698,9 @@ Record a fuel transaction.
 - `pump_id`: required
 - `fuel_type`: required, one of `octane`, `diesel`, `petrol`
 - `quantity`: required, minimum `0.1`
+- `total_price`: optional, minimum `0.01` — if provided, must match `quantity × latest price_per_unit` (rounded to 2 decimal places); mismatch returns `400`
 
-> `total_price` is calculated automatically: `quantity × latest price_per_unit`. Uses a MongoDB transaction for atomicity.
+> `total_price` is calculated server-side as `quantity × latest price_per_unit` (rounded to 2 decimal places, using `ROUND_HALF_UP`). If the client submits `total_price`, the server verifies it matches the calculated value before saving. Uses a MongoDB transaction for atomicity.
 
 **Responses:** `201` / `400` / `401` / `403` / `404 Vehicle/Pump/FuelPrice not found`
 

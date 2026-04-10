@@ -45,6 +45,11 @@ def create_transaction():
                 (Decimal(str(data['quantity'])) * Decimal(str(fuel_price['price_per_unit'])))
                 .quantize(Decimal("0.01"), rounding=ROUND_HALF_UP)
             )
+            if data.get("total_price") is not None:
+                submitted = round(data["total_price"], 2)
+                if submitted != total_price:
+                    return jsonify(error_response(400, f"total_price mismatch: expected {total_price}, got {submitted}")), 400
+            
             transaction = TransactionModel.create(
                 vehicle_id=data["vehicle_id"],
                 pump_id=data["pump_id"],

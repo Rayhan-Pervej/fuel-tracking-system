@@ -142,6 +142,49 @@ class TestCreateTransaction:
                                   headers={"Authorization": f"Bearer {admin_token}"})
             assert res.status_code == 201, f"fuel_type '{ftype}' should be valid"
 
+    def test_total_price_matches_succeeds(self, client, admin_token):
+        # quantity=10.0, price_per_unit=125.0 → total_price=1250.0
+        payload = {**TRANSACTION_PAYLOAD, "total_price": 1250.0}
+        with patch("app.models.vehicle.VehicleModel.get_by_id", return_value=VEHICLE), \
+             patch("app.models.pump.PumpModel.get_by_id", return_value=PUMP), \
+             patch("app.models.fuel_price.FuelPriceModel.get_latest", return_value=FUEL_PRICE), \
+             patch("app.models.transaction.TransactionModel.create", return_value=TRANSACTION), \
+             patch("app.routes.transaction.mongo_client", mock_session()):
+            res = client.post("/api/transactions/", json=payload,
+                              headers={"Authorization": f"Bearer {admin_token}"})
+        assert res.status_code == 201
+
+    def test_total_price_mismatch_rejected(self, client, admin_token):
+        # quantity=10.0, price_per_unit=125.0 → expected 1250.0, submitting 999.0
+        payload = {**TRANSACTION_PAYLOAD, "total_price": 999.0}
+        with patch("app.models.vehicle.VehicleModel.get_by_id", return_value=VEHICLE), \
+             patch("app.models.pump.PumpModel.get_by_id", return_value=PUMP), \
+             patch("app.models.fuel_price.FuelPriceModel.get_latest", return_value=FUEL_PRICE), \
+             patch("app.routes.transaction.mongo_client", mock_session()):
+            res = client.post("/api/transactions/", json=payload,
+                              headers={"Authorization": f"Bearer {admin_token}"})
+        assert res.status_code == 400
+        assert "mismatch" in res.get_json()["message"].lower()
+
+    def test_total_price_omitted_still_succeeds(self, client, admin_token):
+        # total_price is optional — omitting it works fine
+        with patch("app.models.vehicle.VehicleModel.get_by_id", return_value=VEHICLE), \
+             patch("app.models.pump.PumpModel.get_by_id", return_value=PUMP), \
+             patch("app.models.fuel_price.FuelPriceModel.get_latest", return_value=FUEL_PRICE), \
+             patch("app.models.transaction.TransactionModel.create", return_value=TRANSACTION), \
+             patch("app.routes.transaction.mongo_client", mock_session()):
+            res = client.post("/api/transactions/", json=TRANSACTION_PAYLOAD,
+                              headers={"Authorization": f"Bearer {admin_token}"})
+        assert res.status_code == 201
+
+    def test_total_price_too_low_rejected(self, client, admin_token):
+        # total_price below schema minimum (0.01)
+        payload = {**TRANSACTION_PAYLOAD, "total_price": 0.0}
+        res = client.post("/api/transactions/", json=payload,
+                          headers={"Authorization": f"Bearer {admin_token}"})
+        assert res.status_code == 400
+        assert "total_price" in res.get_json()["errors"]
+
 
 class TestGetTransaction:
     def test_success_as_admin(self, client, admin_token):
