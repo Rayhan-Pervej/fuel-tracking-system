@@ -74,9 +74,9 @@ class PumpEmployeeModel:
         return list(PumpEmployeeModel.collection().find(query).sort("created_at", -1).limit(limit + 1))
 
     @staticmethod
-    def get_by_user(user_id: str) -> list:
-        return list(PumpEmployeeModel.collection().find({"user_id": user_id}))
-    
+    def get_by_user(user_id: str) -> dict | None:
+        return PumpEmployeeModel.collection().find_one({"user_id": user_id})
+
     @staticmethod
     def is_assigned_anywhere(user_id: str) -> bool:
         return PumpEmployeeModel.collection().find_one({"user_id": user_id}) is not None

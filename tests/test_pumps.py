@@ -120,12 +120,22 @@ class TestGetAllPumps:
         assert res.status_code == 200
         mock_svc.assert_called_once()
 
-    def test_filter_by_location_and_license(self, client, admin_token):
-        with patch("app.services.pump_service.PumpService.get_filtered", return_value=([PUMP], None, False)) as mock_svc:
-            res = client.get("/api/pumps/?location=Dhaka&license=P-001",
+    def test_filter_by_name(self, client, admin_token):
+        pumps = [PUMP]
+        with patch("app.services.pump_service.PumpService.get_filtered", return_value=(pumps, None, False)) as mock_svc:
+            res = client.get("/api/pumps/?name=Shell",
                              headers={"Authorization": f"Bearer {admin_token}"})
         assert res.status_code == 200
         mock_svc.assert_called_once()
+        assert mock_svc.call_args.kwargs.get("name") == "Shell"
+
+    def test_filter_by_location_license_and_name(self, client, admin_token):
+        with patch("app.services.pump_service.PumpService.get_filtered", return_value=([PUMP], None, False)) as mock_svc:
+            res = client.get("/api/pumps/?location=Dhaka&license=P-001&name=Shell",
+                             headers={"Authorization": f"Bearer {admin_token}"})
+        assert res.status_code == 200
+        mock_svc.assert_called_once()
+        assert mock_svc.call_args.kwargs.get("name") == "Shell"
 
     def test_empty_result(self, client, admin_token):
         with patch("app.services.pump_service.PumpService.get_filtered", return_value=([], None, False)):

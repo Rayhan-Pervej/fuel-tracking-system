@@ -12,21 +12,23 @@ add_schema = AddPumpEmployeeSchema()
 update_schema = UpdatePumpEmployeeRoleSchema()
 
 
-@pump_employee_bp.route('/me/pumps', methods=['GET'])
+@pump_employee_bp.route('/me/pump', methods=['GET'])
 @require_auth
-@require_role("employee", "admin") 
-def get_my_pumps():
-    assignments = PumpEmployeeModel.get_by_user(g.user_id)
-    return jsonify(success_response("Pump assignments retrieved successfully", {"pumps": assignments})), 200
-
+@require_role("employee", "admin")
+def get_my_pump():
+    assignment = PumpEmployeeModel.get_by_user(g.user_id)
+    if not assignment:
+        return jsonify(error_response(404,"No pump assignment found")), 404
+    return jsonify(success_response("Pump assignment retrieved successfully", {"pump": assignment})), 200
 
 @pump_employee_bp.route('/<pump_id>/employees', methods=['POST'])
 @require_auth
-@require_role("employee", "admin") 
+@require_role("employee", "admin")
 def add_employee(pump_id):
     pump = PumpModel.get_by_id(pump_id)
     if not pump:
         return jsonify(error_response(404, "Pump not found")), 404
+
     if g.role != "admin" and not PumpEmployeeModel.is_pump_admin(pump_id, g.user_id):
         return jsonify(error_response(403, "You do not have permission")), 403
 
@@ -34,25 +36,56 @@ def add_employee(pump_id):
         data = add_schema.load(request.get_json() or {})
     except ValidationError as e:
         return jsonify(error_response(400, "Validation failed", errors=e.messages)), 400
-    
-    user = UserModel.get_by_email(data['email'])
-    if not user:
-        return jsonify(error_response(404, "User not found")), 404
-    user_id = user['_id']
+
+    mode = data.get("mode")
+    user = UserModel.get_by_email(data["email"])
+
+    if mode == "existing":
+        if not user:
+            return jsonify(error_response(404, "User not found")), 404
+
+    elif mode == "new":
+        if user:
+            return jsonify(error_response(409, "User already exists. Use existing mode")), 409
+        if not data.get("name") or not data.get("password"):
+            return jsonify(error_response(400, "name and password are required for new user")), 400
+        if data["role"] == "pump_admin" and g.role != "admin":
+            return jsonify(error_response(403, "Only admin can create a new pump admin")), 403
+        try:
+            user = UserModel.create(
+                name=data["name"],
+                email=data["email"],
+                password=data["password"],
+                role="employee"
+            )
+        except ValueError as e:
+            return jsonify(error_response(409, str(e))), 409
+
+    else:
+        return jsonify(error_response(400, "Invalid mode. Use 'existing' or 'new'")), 400
+
+    user_id = user["_id"]
+
     if PumpEmployeeModel.exists(pump_id, user_id):
         return jsonify(error_response(409, "Employee record already exists for this user")), 409
+
     if PumpEmployeeModel.is_assigned_anywhere(user_id):
         return jsonify(error_response(409, "Employee is already assigned to another pump")), 409
-    if user['role'] != 'employee':
+
+    if user["role"] != "employee":
         return jsonify(error_response(400, "Only users with employee role can be assigned to a pump")), 400
 
-    if data['role'] == 'pump_admin' and PumpEmployeeModel.has_pump_admin(pump_id):
+    if data["role"] == "pump_admin" and PumpEmployeeModel.has_pump_admin(pump_id):
         return jsonify(error_response(400, "Pump already has an admin")), 400
 
-    record = PumpEmployeeModel.create(pump_id=pump_id, user_id=user_id, added_by=g.user_id, role=data['role'])
+    record = PumpEmployeeModel.create(
+        pump_id=pump_id,
+        user_id=user_id,
+        added_by=g.user_id,
+        role=data["role"]
+    )
 
     return jsonify(created_response("Employee added successfully", {"employee": record})), 201
-
 
 @pump_employee_bp.route('/<pump_id>/employees/<user_id>', methods=['DELETE'])
 @require_auth

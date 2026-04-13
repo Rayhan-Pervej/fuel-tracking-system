@@ -145,20 +145,24 @@ class TestGetMe:
 
 class TestGetUser:
     def test_get_existing_user(self, client, admin_token):
-        with patch("app.models.user.UserModel.get_by_id", return_value=USER_DB):
+        with patch("app.models.user.UserModel.get_by_id", return_value=USER_DB), \
+             patch("app.models.pump_employee.PumpEmployeeModel.get_by_user", return_value=None):
             res = client.get("/api/users/uuid-1",
                              headers={"Authorization": f"Bearer {admin_token}"})
         assert res.status_code == 200
         assert res.get_json()["data"]["user"]["_id"] == "uuid-1"
+        assert res.get_json()["data"]["user"]["pump_role"] is None
 
     def test_password_hash_not_returned(self, client, admin_token):
-        with patch("app.models.user.UserModel.get_by_id", return_value=USER_DB):
+        with patch("app.models.user.UserModel.get_by_id", return_value=USER_DB), \
+             patch("app.models.pump_employee.PumpEmployeeModel.get_by_user", return_value=None):
             res = client.get("/api/users/uuid-1",
                              headers={"Authorization": f"Bearer {admin_token}"})
         assert "password_hash" not in res.get_json()["data"]["user"]
 
     def test_get_nonexistent_user(self, client, admin_token):
-        with patch("app.models.user.UserModel.get_by_id", return_value=None):
+        with patch("app.models.user.UserModel.get_by_id", return_value=None), \
+             patch("app.models.pump_employee.PumpEmployeeModel.get_by_user", return_value=None):
             res = client.get("/api/users/bad-id",
                              headers={"Authorization": f"Bearer {admin_token}"})
         assert res.status_code == 404
@@ -168,10 +172,19 @@ class TestGetUser:
         assert res.status_code == 401
 
     def test_any_authenticated_user_can_access(self, client, employee_token):
-        with patch("app.models.user.UserModel.get_by_id", return_value=USER_DB):
+        with patch("app.models.user.UserModel.get_by_id", return_value=USER_DB), \
+             patch("app.models.pump_employee.PumpEmployeeModel.get_by_user", return_value=None):
             res = client.get("/api/users/uuid-1",
                              headers={"Authorization": f"Bearer {employee_token}"})
         assert res.status_code == 200
+
+    def test_pump_role_is_returned_when_assignment_exists(self, client, admin_token):
+        with patch("app.models.user.UserModel.get_by_id", return_value=USER_DB), \
+             patch("app.models.pump_employee.PumpEmployeeModel.get_by_user", return_value={"role": "employee"}):
+            res = client.get("/api/users/uuid-1",
+                             headers={"Authorization": f"Bearer {admin_token}"})
+        assert res.status_code == 200
+        assert res.get_json()["data"]["user"]["pump_role"] == "employee"
 
 
 class TestGetUsers:
@@ -213,6 +226,15 @@ class TestGetUsers:
                              headers={"Authorization": f"Bearer {admin_token}"})
         assert res.status_code == 200
         mock_svc.assert_called_once()
+
+    def test_filter_by_name(self, client, admin_token):
+        users = [{"_id": "uuid-1", "name": "Rayhan", "email": "rayhan@x.com", "role": "employee"}]
+        with patch("app.services.user_service.UserService.get_filtered", return_value=(users, None, False)) as mock_svc:
+            res = client.get("/api/users/?name=Rayhan",
+                             headers={"Authorization": f"Bearer {admin_token}"})
+        assert res.status_code == 200
+        mock_svc.assert_called_once()
+        assert mock_svc.call_args.kwargs.get("name") == "Rayhan"
 
     def test_empty_result(self, client, admin_token):
         with patch("app.services.user_service.UserService.get_filtered", return_value=([], None, False)):

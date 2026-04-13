@@ -38,6 +38,7 @@ def get_users():
         return jsonify(error_response(400, "Invalid pagination parameters")), 400
     users, next_cursor, has_more = UserService.get_filtered(
         role=request.args.get("role"),
+        name=request.args.get("name"),
         cursor=cursor,
         limit=limit,
         email=request.args.get("email")
@@ -69,6 +70,8 @@ def get_user(user_id):
     user.pop("password_hash", None)
     user.pop("refresh_token", None)
     user.pop("refresh_token_expires_at", None)
+    pump_employee = PumpEmployeeModel.get_by_user(user_id)
+    user["pump_role"] = pump_employee["role"] if pump_employee else None
     return jsonify(success_response("User retrieved successfully", {"user": user})), 200
 
 

@@ -6,17 +6,19 @@ import re
 class PumpService:
 
     @staticmethod
-    def build_query(location=None, license=None):
+    def build_query(location=None, license=None, name=None):
         query = {}
         if location:
             query["location"] = {"$regex": re.escape(location), "$options": "i"}
         if license:
             query["license"] = {"$regex": re.escape(license), "$options": "i"}
+        if name:
+            query["name"] = {"$regex": re.escape(name), "$options": "i"}
         return query
 
     @staticmethod
-    def get_filtered(location=None, license=None, cursor=None, limit=10):
-        query = PumpService.build_query(location=location, license=license)
+    def get_filtered(location=None, license=None, name=None, cursor=None, limit=10):
+        query = PumpService.build_query(location=location, license=license, name=name)
         after_dt = decode_cursor(cursor) if cursor else None
         rows = PumpModel.get_page(query, after_dt=after_dt, limit=limit)
         has_more = len(rows) > limit

@@ -40,6 +40,7 @@ def get_pumps():
     pumps, next_cursor, has_more = PumpService.get_filtered(
         location=request.args.get("location"),
         license=request.args.get("license"),
+        name=request.args.get("name"),
         cursor=cursor,
         limit=limit
     )

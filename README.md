@@ -295,6 +295,7 @@ Get all users (paginated).
 | `limit` | int | No | Page size (default: 10, max: 100) |
 | `cursor` | string | No | Opaque cursor from previous response |
 | `role` | string | No | Filter by role: `admin`, `employee` |
+| `name` | string | No | Filter by name (partial match, case-insensitive) |
 | `email` | string | No | Filter by email (partial match, case-insensitive) |
 
 **Responses:** `200` / `400` / `401` / `403`
@@ -314,6 +315,9 @@ Get the currently authenticated user's profile.
 Get a single user by ID.
 
 **Auth required:** Any authenticated user
+
+**Response details:**
+- Includes `pump_role`, which is the user's assignment role for their current pump (`employee` or `pump_admin`) or `null` if not assigned.
 
 **Responses:** `200` / `401` / `404`
 
@@ -454,6 +458,7 @@ Get all pumps (paginated).
 |-------|------|----------|-------------|
 | `limit` | int | No | Page size (default: 10, max: 100) |
 | `cursor` | string | No | Opaque cursor from previous response |
+| `name` | string | No | Filter by name (partial match, case-insensitive) |
 | `location` | string | No | Filter by location (partial match, case-insensitive) |
 | `license` | string | No | Filter by license (partial match, case-insensitive) |
 
@@ -492,12 +497,12 @@ Delete a pump and cascade-delete all its employee assignments.
 
 ### Pump Employees
 
-#### `GET /api/pumps/me/pumps`
-Get all pump assignments for the currently authenticated user.
+#### `GET /api/pumps/me/pump`
+Get the pump assignment for the currently authenticated user.
 
 **Auth required:** `employee` or `admin`
 
-**Responses:** `200` / `401` / `403`
+**Responses:** `200` / `401` / `403` / `404 No pump assignment found`
 
 ---
 
@@ -506,16 +511,28 @@ Add an employee to a pump.
 
 **Auth required:** Global `admin` OR `pump_admin` of this pump
 
-**Request body:**
+**Request body (existing user):**
 ```json
-{ "email": "employee@example.com", "role": "employee" }
+{ "mode": "existing", "email": "employee@example.com", "role": "employee" }
+```
+
+**Request body (create new user + assign):**
+```json
+{
+  "mode": "new",
+  "name": "New Employee",
+  "email": "new.employee@example.com",
+  "password": "secret123",
+  "role": "employee"
+}
 ```
 
 > `role` must be `pump_admin` or `employee`. Only one `pump_admin` allowed per pump.
-> The user being added must have global role `employee`.
+> In `new` mode, a platform user is created first with global role `employee`, then assigned to the pump.
 > An employee can only be assigned to one pump at a time.
+> Only global `admin` can create a brand-new `pump_admin` in `new` mode.
 
-**Responses:** `201` / `400` / `401` / `403` / `404` / `409 Already assigned`
+**Responses:** `201` / `400` / `401` / `403` / `404` / `409 Already assigned or user already exists in new mode`
 
 ---
 
@@ -736,6 +753,11 @@ Get all transactions for a pump (paginated).
 
 Connect to namespace `/dashboard`. A valid access token **must** be passed in the `auth` object on connect, otherwise the connection will be rejected.
 
+**Access rules:**
+- Global `admin`: allowed, receives all pumps data.
+- Pump-scoped `pump_admin` (from `pump_employees`): allowed, receives only assigned pump data.
+- Regular `employee` (not pump admin): connection is rejected.
+
 ```javascript
 const socket = io('http://localhost:5000/dashboard', {
   auth: { token: '<access_token>' }
@@ -752,15 +774,20 @@ const socket = io('http://localhost:5000/dashboard', {
 
 | Event | Payload | Description |
 |-------|---------|-------------|
-| `init` | `{ stats, transactions[] }` | Sent on connect or in response to `request_init` — last 20 transactions + current stats |
-| `new_transaction` | `{ transaction, stats }` | Broadcast when a new transaction is created |
+| `init` | `{ stats, transactions[] }` | Sent on connect or in response to `request_init`. Admin gets global last 20 + global stats; pump admin gets last 20 for assigned pump + pump-scoped stats |
+| `new_transaction` | `{ transaction, stats }` | Real-time insert event. Admin receives all transactions; pump admin receives only transactions for assigned pump |
 
 ### Stats object
 ```json
 {
   "total_transactions": 120,
   "total_fuel_dispensed": 1500.5,
-  "total_revenue": 187562.5
+  "total_revenue": 187562.5,
+  "fuel_type_totals": {
+    "octane": 520.0,
+    "diesel": 710.5,
+    "petrol": 270.0
+  }
 }
 ```
 

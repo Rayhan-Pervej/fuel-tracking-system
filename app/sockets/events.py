@@ -1,31 +1,84 @@
 import logging
 import time
-from flask_socketio import emit, disconnect
 from app.extensions import mongo, socketio
-from flask import current_app
+from flask import current_app, request
 import jwt
+from flask_socketio import emit, disconnect, join_room
+from app.models.pump_employee import PumpEmployeeModel
+from app.constants import FUEL_TYPES
+
 logger = logging.getLogger(__name__)
+CLIENT_SCOPE = {}
+
+def get_dashboard_scope(user_id, role):
+    if role == "admin":
+        return {"room": "dashboard_admin", "pump_id": None}
+    assignment = PumpEmployeeModel.get_by_user(user_id)
+    if assignment and assignment.get("role") == "pump_admin":
+        return {"room": f"pump:{assignment['pump_id']}", "pump_id": assignment["pump_id"]}
+    return None
 
 
-def get_dashboard_stats():
-    pipeline = [
+def get_fuel_type_totals(pump_id=None):
+    pipeline = []
+    if pump_id is not None:
+        pipeline.append({"$match": {"pump_id": pump_id}})
+
+    pipeline.extend([
+        {
+            "$lookup": {
+                "from": "fuel_prices",
+                "localField": "fuel_price_id",
+                "foreignField": "_id",
+                "as": "fuel_price"
+            }
+        },
+        {"$unwind": "$fuel_price"},
         {
             "$group": {
-                "_id": None,
-                "total_transactions": {"$sum": 1},
-                "total_revenue": {"$sum": "$total_price"},
-                "total_fuel_dispensed": {"$sum": "$quantity"}
+                "_id": "$fuel_price.fuel_type",
+                "total_quantity": {"$sum": "$quantity"}
             }
         }
-    ]
+    ])
+
+    rows = list(mongo.db["transactions"].aggregate(pipeline))
+    totals = {fuel_type: 0.0 for fuel_type in FUEL_TYPES}
+    for row in rows:
+        fuel_type = row.get("_id")
+        if fuel_type in totals:
+            totals[fuel_type] = round(row.get("total_quantity", 0.0), 2)
+    return totals
+
+
+def get_dashboard_stats(pump_id=None):
+    pipeline = []
+
+    if pump_id is not None:
+        pipeline.append({"$match": {"pump_id": pump_id}})
+
+    pipeline.append({
+        "$group": {
+            "_id": None,
+            "total_transactions": {"$sum": 1},
+            "total_revenue": {"$sum": "$total_price"},
+            "total_fuel_dispensed": {"$sum": "$quantity"}
+        }
+    })
     result = list(mongo.db["transactions"].aggregate(pipeline))
     if not result:
-        return {"total_transactions": 0, "total_revenue": 0.0, "total_fuel_dispensed": 0.0}
+        return {
+            "total_transactions": 0,
+            "total_revenue": 0.0,
+            "total_fuel_dispensed": 0.0,
+            "fuel_type_totals": get_fuel_type_totals(pump_id)
+        }
     row = result[0]
     return {
         "total_transactions": row["total_transactions"],
         "total_revenue": round(row["total_revenue"], 2),
-        "total_fuel_dispensed": round(row["total_fuel_dispensed"], 2)
+        "total_fuel_dispensed": round(row["total_fuel_dispensed"], 2),
+        "fuel_type_totals": get_fuel_type_totals(pump_id)
     }
 
 
@@ -37,11 +90,21 @@ def watch_transactions():
                     if change["operationType"] == "insert":
                         doc = change["fullDocument"]
                         doc = enrich_transactions([doc])[0]
-                        stats = get_dashboard_stats()
-                        socketio.emit("new_transaction", {
-                            "transaction": doc,
-                            "stats": stats
-                        }, namespace="/dashboard")
+                        pump_id = doc["pump_id"]
+
+                        socketio.emit(
+                                "new_transaction",
+                                {"transaction": doc, "stats": get_dashboard_stats()},
+                                namespace="/dashboard",
+                                room="dashboard_admin"
+                        )
+
+                        socketio.emit(
+                                "new_transaction",
+                                {"transaction": doc, "stats": get_dashboard_stats(pump_id)},
+                                namespace="/dashboard",
+                                room=f"pump:{pump_id}"
+                        )
 
         except Exception as e:
             logger.error(f"Change Stream Error: {e}. Reconnecting in 5 seconds...")
@@ -64,11 +127,10 @@ def enrich_transactions(transactions):
 
     return transactions
 
-
-
-def build_init_payload():
-    stats = get_dashboard_stats()
-    recent = list(mongo.db["transactions"].find().sort("created_at", -1).limit(20))
+def build_init_payload(pump_id=None):
+    stats = get_dashboard_stats(pump_id)
+    query = {"pump_id": pump_id} if pump_id else {}
+    recent = list(mongo.db["transactions"].find(query).sort("created_at", -1).limit(20))
     recent = enrich_transactions(recent)
     return {"stats": stats, "transactions": recent}
 
@@ -79,21 +141,42 @@ def on_connect(auth=None):
         disconnect()
         return
     try:
-        jwt.decode(token, current_app.config["JWT_SECRET_KEY"], algorithms=["HS256"])
+        payload = jwt.decode(token, current_app.config["JWT_SECRET_KEY"], algorithms=["HS256"])
     except jwt.InvalidTokenError:
         disconnect()
         return
 
+    role = payload.get("role")
+    user_id = payload.get("user_id")
+    if not user_id:
+        disconnect()
+        return
+
+    scope = get_dashboard_scope(user_id, role)
+    if not scope:
+        disconnect()
+        return
+
+    CLIENT_SCOPE[request.sid] = scope
+    join_room(scope["room"])
     logger.info("Dashboard client connected")
-    payload = build_init_payload()
-    emit("init", payload)
+    init_payload = build_init_payload(pump_id=scope["pump_id"])
+    emit("init", init_payload)
+
+@socketio.on("disconnect", namespace="/dashboard")
+def on_disconnect():
+    CLIENT_SCOPE.pop(request.sid, None)
+
 
 @socketio.on("request_init", namespace="/dashboard")
 def handle_request_init():
-    payload = build_init_payload()
+    scope = CLIENT_SCOPE.get(request.sid)
+    if not scope:
+        disconnect()
+        return
+    payload = build_init_payload(pump_id=scope["pump_id"])
     emit("init", payload)
 
 def register_socket_events():
     socketio.start_background_task(watch_transactions)
 
-    
