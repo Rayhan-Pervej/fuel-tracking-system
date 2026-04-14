@@ -154,8 +154,8 @@ Obtain tokens via `POST /api/auth/login`. Access tokens expire after 15 minutes.
 | vehicle_id | string | FK → Vehicle |
 | pump_id | string | FK → Pump |
 | fuel_price_id | string | FK → FuelPrice |
-| quantity | float | Amount of fuel (in FuelPrice unit) |
-| total_price | float | quantity × price_per_unit (snapshot) |
+| quantity | float | Amount of fuel (in FuelPrice unit), stored at 4 decimal precision |
+| total_price | float | Total cost snapshot, stored at 4 decimal precision |
 | created_at | datetime | Creation timestamp |
 
 > `fuel_type`, `unit`, and `currency` are not stored on Transaction — accessed via `fuel_price_id` join.
@@ -653,14 +653,23 @@ Record a fuel transaction.
 
 **Auth required:** `admin` or `employee` assigned to the pump
 
-**Request body:**
+**Request body — quantity mode:**
 ```json
 {
   "vehicle_number": "DH-1234",
   "pump_id": "...",
   "fuel_type": "octane",
-  "quantity": 10.0,
-  "total_price": 1250.0
+  "quantity": 10.0
+}
+```
+
+**Request body — amount mode:**
+```json
+{
+  "vehicle_number": "DH-1234",
+  "pump_id": "...",
+  "fuel_type": "octane",
+  "total_price": 400.0
 }
 ```
 
@@ -668,11 +677,11 @@ Record a fuel transaction.
 - `vehicle_number`: required, 2–10 characters
 - `pump_id`: required
 - `fuel_type`: required, one of `octane`, `diesel`, `petrol`
-- `quantity`: required, minimum `0.1`
-- `total_price`: optional, minimum `0.01` — if provided, must match `quantity × latest price_per_unit` (rounded to 2 decimal places); mismatch returns `400`
+- `quantity` or `total_price`: exactly one must be provided — not both, not neither
+  - `quantity`: minimum `0.1`
+  - `total_price`: minimum `0.01`
 
-> The vehicle is resolved by `vehicle_number` (case-insensitive). If no matching vehicle exists, one is automatically created.
-> `total_price` is calculated server-side as `quantity × latest price_per_unit` (ROUND_HALF_UP to 2 decimal places). Uses a MongoDB transaction for atomicity.
+> The server derives the missing field: quantity mode → `total_price = quantity × rate`; amount mode → `quantity = total_price / rate`. Both are stored at 4 decimal precision. The vehicle is auto-created if it doesn't exist. Uses a MongoDB transaction for atomicity.
 
 **Responses:** `201` / `400` / `401` / `403` / `404 Pump/FuelPrice not found`
 

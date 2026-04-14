@@ -66,20 +66,21 @@ def create_transaction():
             fuel_price = FuelPriceModel.get_latest(data["fuel_type"], session=session)
             if not fuel_price:
                 return jsonify(error_response(404, f"No active price found for {data['fuel_type']}")), 404
-            total_price = float(
-                (Decimal(str(data['quantity'])) * Decimal(str(fuel_price['price_per_unit'])))
-                .quantize(Decimal("0.01"), rounding=ROUND_HALF_UP)
-            )
-            if data.get("total_price") is not None:
-                submitted = round(data["total_price"], 2)
-                if submitted != total_price:
-                    return jsonify(error_response(400, f"total_price mismatch: expected {total_price}, got {submitted}")), 400
-            
+            rate = Decimal(str(fuel_price['price_per_unit']))
+            if data['quantity'] is not None:
+                quantity = Decimal(str(data['quantity']))
+                total_price = float((quantity * rate).quantize(Decimal("0.0001"), rounding=ROUND_HALF_UP))
+                quantity = float(quantity)
+            else:
+                total_price_d = Decimal(str(data['total_price']))
+                quantity = float((total_price_d / rate).quantize(Decimal("0.0001"), rounding=ROUND_HALF_UP))
+                total_price = float(total_price_d)
+
             transaction = TransactionModel.create(
                 vehicle_id=vehicle["_id"],
                 pump_id=data["pump_id"],
                 fuel_price_id=fuel_price["_id"],
-                quantity=data["quantity"],
+                quantity=quantity,
                 total_price=total_price,
                 session=session
             )
