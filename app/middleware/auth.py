@@ -7,7 +7,11 @@ from app.constants import error_response
 def require_auth(f):
     @wraps(f)
     def decorated(*args, **kwargs):
-        token = request.headers.get("Authorization", "").replace("Bearer ", "")
+        # token = request.headers.get("Authorization", "").replace("Bearer ", "")
+        header = request.headers.get("Authorization", "")
+        parts = header.split(" ", 1)
+        token = parts[1] if len(parts) == 2 and parts[0] == "Bearer" else ""
+
         if not token:
             return jsonify(error_response(401, "Authorization token is missing")), 401
         try:
