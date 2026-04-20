@@ -1,6 +1,13 @@
 import pytest
+import base64
+import json
 from unittest.mock import patch, MagicMock
-import jwt
+
+
+def make_userinfo(user_id, role):
+    payload = {"sub": user_id, "realm_access": {"roles": [role]}}
+    return base64.b64encode(json.dumps(payload).encode()).decode()
+
 
 @pytest.fixture
 def app():
@@ -18,7 +25,6 @@ def app():
                 from app import create_app
                 flask_app = create_app()
                 flask_app.config["TESTING"] = True
-                flask_app.config["JWT_SECRET_KEY"] = "test-secret"
                 flask_app.config["MONGO_URI"] = "mongodb://localhost/test"
                 yield flask_app
 
@@ -29,13 +35,12 @@ def client(app):
 
 @pytest.fixture
 def admin_token(app):
-    return jwt.encode({"user_id": "admin-1", "role": "admin"}, app.config["JWT_SECRET_KEY"], algorithm="HS256")
+    return make_userinfo("admin-1", "admin")
 
 @pytest.fixture
 def pump_admin_token(app):
-    return jwt.encode({"user_id": "pump-admin-1", "role": "employee"}, app.config["JWT_SECRET_KEY"], algorithm="HS256")
+    return make_userinfo("pump-admin-1", "employee")
 
 @pytest.fixture
 def employee_token(app):
-    return jwt.encode({"user_id": "user-2", "role": "employee"}, app.config["JWT_SECRET_KEY"], algorithm="HS256")
-
+    return make_userinfo("user-2", "employee")

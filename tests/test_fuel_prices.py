@@ -23,7 +23,7 @@ class TestCreateFuelPrice:
     def test_success(self, client, admin_token):
         with patch("app.models.fuel_price.FuelPriceModel.create", return_value=FUEL_PRICE):
             res = client.post("/api/fuel-prices/", json=FUEL_PRICE_PAYLOAD,
-                              headers={"Authorization": f"Bearer {admin_token}"})
+                              headers={"X-Userinfo": admin_token})
         assert res.status_code == 201
         assert res.get_json()["data"]["fuel_price"]["_id"] == "fp-1"
 
@@ -32,7 +32,7 @@ class TestCreateFuelPrice:
         created = {**FUEL_PRICE, "currency": "USD"}
         with patch("app.models.fuel_price.FuelPriceModel.create", return_value=created):
             res = client.post("/api/fuel-prices/", json=payload,
-                              headers={"Authorization": f"Bearer {admin_token}"})
+                              headers={"X-Userinfo": admin_token})
         assert res.status_code == 201
         assert res.get_json()["data"]["fuel_price"]["currency"] == "USD"
 
@@ -42,47 +42,47 @@ class TestCreateFuelPrice:
 
     def test_forbidden_employee(self, client, employee_token):
         res = client.post("/api/fuel-prices/", json=FUEL_PRICE_PAYLOAD,
-                          headers={"Authorization": f"Bearer {employee_token}"})
+                          headers={"X-Userinfo": employee_token})
         assert res.status_code == 403
 
     def test_invalid_fuel_type(self, client, admin_token):
         bad = {**FUEL_PRICE_PAYLOAD, "fuel_type": "kerosene"}
         res = client.post("/api/fuel-prices/", json=bad,
-                          headers={"Authorization": f"Bearer {admin_token}"})
+                          headers={"X-Userinfo": admin_token})
         assert res.status_code == 400
         assert "fuel_type" in res.get_json()["errors"]
 
     def test_invalid_unit(self, client, admin_token):
         bad = {**FUEL_PRICE_PAYLOAD, "unit": "barrel"}
         res = client.post("/api/fuel-prices/", json=bad,
-                          headers={"Authorization": f"Bearer {admin_token}"})
+                          headers={"X-Userinfo": admin_token})
         assert res.status_code == 400
         assert "unit" in res.get_json()["errors"]
 
     def test_invalid_currency(self, client, admin_token):
         bad = {**FUEL_PRICE_PAYLOAD, "currency": "YEN"}
         res = client.post("/api/fuel-prices/", json=bad,
-                          headers={"Authorization": f"Bearer {admin_token}"})
+                          headers={"X-Userinfo": admin_token})
         assert res.status_code == 400
         assert "currency" in res.get_json()["errors"]
 
     def test_invalid_date_format(self, client, admin_token):
         bad = {**FUEL_PRICE_PAYLOAD, "effective_from": "01-01-2025"}
         res = client.post("/api/fuel-prices/", json=bad,
-                          headers={"Authorization": f"Bearer {admin_token}"})
+                          headers={"X-Userinfo": admin_token})
         assert res.status_code == 400
         assert "effective_from" in res.get_json()["errors"]
 
     def test_price_too_low(self, client, admin_token):
         bad = {**FUEL_PRICE_PAYLOAD, "price_per_unit": 0.0}
         res = client.post("/api/fuel-prices/", json=bad,
-                          headers={"Authorization": f"Bearer {admin_token}"})
+                          headers={"X-Userinfo": admin_token})
         assert res.status_code == 400
         assert "price_per_unit" in res.get_json()["errors"]
 
     def test_missing_all_required_fields(self, client, admin_token):
         res = client.post("/api/fuel-prices/", json={},
-                          headers={"Authorization": f"Bearer {admin_token}"})
+                          headers={"X-Userinfo": admin_token})
         assert res.status_code == 400
         errors = res.get_json()["errors"]
         assert "fuel_type" in errors
@@ -96,7 +96,7 @@ class TestCreateFuelPrice:
             created = {**FUEL_PRICE, "fuel_type": ftype}
             with patch("app.models.fuel_price.FuelPriceModel.create", return_value=created):
                 res = client.post("/api/fuel-prices/", json=payload,
-                                  headers={"Authorization": f"Bearer {admin_token}"})
+                                  headers={"X-Userinfo": admin_token})
             assert res.status_code == 201, f"fuel_type '{ftype}' should be valid"
 
     def test_all_units_valid(self, client, admin_token):
@@ -105,7 +105,7 @@ class TestCreateFuelPrice:
             created = {**FUEL_PRICE, "unit": unit}
             with patch("app.models.fuel_price.FuelPriceModel.create", return_value=created):
                 res = client.post("/api/fuel-prices/", json=payload,
-                                  headers={"Authorization": f"Bearer {admin_token}"})
+                                  headers={"X-Userinfo": admin_token})
             assert res.status_code == 201, f"unit '{unit}' should be valid"
 
 
@@ -113,26 +113,26 @@ class TestGetLatestFuelPrice:
     def test_success(self, client, admin_token):
         with patch("app.models.fuel_price.FuelPriceModel.get_latest", return_value=FUEL_PRICE):
             res = client.get("/api/fuel-prices/latest/octane",
-                             headers={"Authorization": f"Bearer {admin_token}"})
+                             headers={"X-Userinfo": admin_token})
         assert res.status_code == 200
         assert res.get_json()["data"]["fuel_price"]["fuel_type"] == "octane"
 
     def test_success_as_employee(self, client, employee_token):
         with patch("app.models.fuel_price.FuelPriceModel.get_latest", return_value=FUEL_PRICE):
             res = client.get("/api/fuel-prices/latest/octane",
-                             headers={"Authorization": f"Bearer {employee_token}"})
+                             headers={"X-Userinfo": employee_token})
         assert res.status_code == 200
 
     def test_success_as_employee(self, client, employee_token):
         with patch("app.models.fuel_price.FuelPriceModel.get_latest", return_value=FUEL_PRICE):
             res = client.get("/api/fuel-prices/latest/octane",
-                             headers={"Authorization": f"Bearer {employee_token}"})
+                             headers={"X-Userinfo": employee_token})
         assert res.status_code == 200
 
     def test_not_found(self, client, admin_token):
         with patch("app.models.fuel_price.FuelPriceModel.get_latest", return_value=None):
             res = client.get("/api/fuel-prices/latest/diesel",
-                             headers={"Authorization": f"Bearer {admin_token}"})
+                             headers={"X-Userinfo": admin_token})
         assert res.status_code == 404
 
     def test_no_token(self, client):
@@ -144,20 +144,20 @@ class TestGetFuelPrice:
     def test_success(self, client, admin_token):
         with patch("app.models.fuel_price.FuelPriceModel.get_by_id", return_value=FUEL_PRICE):
             res = client.get("/api/fuel-prices/fp-1",
-                             headers={"Authorization": f"Bearer {admin_token}"})
+                             headers={"X-Userinfo": admin_token})
         assert res.status_code == 200
         assert res.get_json()["data"]["fuel_price"]["_id"] == "fp-1"
 
     def test_success_as_any_authenticated_user(self, client, employee_token):
         with patch("app.models.fuel_price.FuelPriceModel.get_by_id", return_value=FUEL_PRICE):
             res = client.get("/api/fuel-prices/fp-1",
-                             headers={"Authorization": f"Bearer {employee_token}"})
+                             headers={"X-Userinfo": employee_token})
         assert res.status_code == 200
 
     def test_not_found(self, client, admin_token):
         with patch("app.models.fuel_price.FuelPriceModel.get_by_id", return_value=None):
             res = client.get("/api/fuel-prices/bad-id",
-                             headers={"Authorization": f"Bearer {admin_token}"})
+                             headers={"X-Userinfo": admin_token})
         assert res.status_code == 404
 
     def test_no_token(self, client):
@@ -169,62 +169,62 @@ class TestGetAllFuelPrices:
     def test_success(self, client, admin_token):
         with patch("app.services.fuel_price_service.FuelPriceService.get_filtered", return_value=([FUEL_PRICE], None, False)):
             res = client.get("/api/fuel-prices/",
-                             headers={"Authorization": f"Bearer {admin_token}"})
+                             headers={"X-Userinfo": admin_token})
         assert res.status_code == 200
         assert len(res.get_json()["data"]["fuel_prices"]) == 1
 
     def test_accessible_by_any_authenticated_user(self, client, employee_token):
         with patch("app.services.fuel_price_service.FuelPriceService.get_filtered", return_value=([FUEL_PRICE], None, False)):
             res = client.get("/api/fuel-prices/",
-                             headers={"Authorization": f"Bearer {employee_token}"})
+                             headers={"X-Userinfo": employee_token})
         assert res.status_code == 200
 
     def test_filter_by_fuel_type(self, client, admin_token):
         with patch("app.services.fuel_price_service.FuelPriceService.get_filtered", return_value=([FUEL_PRICE], None, False)) as mock_svc:
             res = client.get("/api/fuel-prices/?fuel_type=octane",
-                             headers={"Authorization": f"Bearer {admin_token}"})
+                             headers={"X-Userinfo": admin_token})
         assert res.status_code == 200
         mock_svc.assert_called_once()
 
     def test_filter_by_effective_from_exact(self, client, admin_token):
         with patch("app.services.fuel_price_service.FuelPriceService.get_filtered", return_value=([FUEL_PRICE], None, False)) as mock_svc:
             res = client.get("/api/fuel-prices/?effective_from=2025-01-01",
-                             headers={"Authorization": f"Bearer {admin_token}"})
+                             headers={"X-Userinfo": admin_token})
         assert res.status_code == 200
         mock_svc.assert_called_once()
 
     def test_filter_by_effective_from_after(self, client, admin_token):
         with patch("app.services.fuel_price_service.FuelPriceService.get_filtered", return_value=([FUEL_PRICE], None, False)) as mock_svc:
             res = client.get("/api/fuel-prices/?effective_from_after=2024-01-01",
-                             headers={"Authorization": f"Bearer {admin_token}"})
+                             headers={"X-Userinfo": admin_token})
         assert res.status_code == 200
         mock_svc.assert_called_once()
 
     def test_filter_by_effective_from_before(self, client, admin_token):
         with patch("app.services.fuel_price_service.FuelPriceService.get_filtered", return_value=([FUEL_PRICE], None, False)) as mock_svc:
             res = client.get("/api/fuel-prices/?effective_from_before=2025-12-31",
-                             headers={"Authorization": f"Bearer {admin_token}"})
+                             headers={"X-Userinfo": admin_token})
         assert res.status_code == 200
         mock_svc.assert_called_once()
 
     def test_filter_by_date_range(self, client, admin_token):
         with patch("app.services.fuel_price_service.FuelPriceService.get_filtered", return_value=([FUEL_PRICE], None, False)) as mock_svc:
             res = client.get("/api/fuel-prices/?effective_from_after=2024-01-01&effective_from_before=2025-12-31",
-                             headers={"Authorization": f"Bearer {admin_token}"})
+                             headers={"X-Userinfo": admin_token})
         assert res.status_code == 200
         mock_svc.assert_called_once()
 
     def test_filter_fuel_type_and_date_range(self, client, admin_token):
         with patch("app.services.fuel_price_service.FuelPriceService.get_filtered", return_value=([FUEL_PRICE], None, False)) as mock_svc:
             res = client.get("/api/fuel-prices/?fuel_type=octane&effective_from_after=2024-01-01",
-                             headers={"Authorization": f"Bearer {admin_token}"})
+                             headers={"X-Userinfo": admin_token})
         assert res.status_code == 200
         mock_svc.assert_called_once()
 
     def test_empty_result(self, client, admin_token):
         with patch("app.services.fuel_price_service.FuelPriceService.get_filtered", return_value=([], None, False)):
             res = client.get("/api/fuel-prices/",
-                             headers={"Authorization": f"Bearer {admin_token}"})
+                             headers={"X-Userinfo": admin_token})
         assert res.status_code == 200
         assert res.get_json()["data"]["fuel_prices"] == []
 
@@ -232,7 +232,7 @@ class TestGetAllFuelPrices:
         prices = [FUEL_PRICE] * 5
         with patch("app.services.fuel_price_service.FuelPriceService.get_filtered", return_value=(prices, "cursor-abc", True)):
             res = client.get("/api/fuel-prices/?limit=5",
-                             headers={"Authorization": f"Bearer {admin_token}"})
+                             headers={"X-Userinfo": admin_token})
         body = res.get_json()
         assert body["data"]["pagination"]["has_more"] is True
         assert body["data"]["pagination"]["next_cursor"] == "cursor-abc"
@@ -242,7 +242,7 @@ class TestGetAllFuelPrices:
         prices = [{"_id": f"fp-{i}", **FUEL_PRICE_PAYLOAD, "currency": "BDT"} for i in range(100)]
         with patch("app.services.fuel_price_service.FuelPriceService.get_filtered", return_value=(prices, "next", True)):
             res = client.get("/api/fuel-prices/?limit=100",
-                             headers={"Authorization": f"Bearer {admin_token}"})
+                             headers={"X-Userinfo": admin_token})
         assert res.status_code == 200
         assert len(res.get_json()["data"]["fuel_prices"]) == 100
 
@@ -252,29 +252,29 @@ class TestGetAllFuelPrices:
 
     def test_invalid_limit(self, client, admin_token):
         res = client.get("/api/fuel-prices/?limit=abc",
-                         headers={"Authorization": f"Bearer {admin_token}"})
+                         headers={"X-Userinfo": admin_token})
         assert res.status_code == 400
 
     def test_invalid_negative_limit(self, client, admin_token):
         res = client.get("/api/fuel-prices/?limit=-1",
-                         headers={"Authorization": f"Bearer {admin_token}"})
+                         headers={"X-Userinfo": admin_token})
         assert res.status_code == 400
 
     def test_invalid_effective_from_format(self, client, admin_token):
         res = client.get("/api/fuel-prices/?effective_from=01-01-2025",
-                         headers={"Authorization": f"Bearer {admin_token}"})
+                         headers={"X-Userinfo": admin_token})
         # Route passes string directly to service; invalid format returns 200 with empty or filtered result
         # or 400 if route validates — either is acceptable
         assert res.status_code in [200, 400]
 
     def test_invalid_effective_from_after_format(self, client, admin_token):
         res = client.get("/api/fuel-prices/?effective_from_after=not-a-date",
-                         headers={"Authorization": f"Bearer {admin_token}"})
+                         headers={"X-Userinfo": admin_token})
         assert res.status_code in [200, 400]
 
     def test_invalid_effective_from_before_format(self, client, admin_token):
         res = client.get("/api/fuel-prices/?effective_from_before=not-a-date",
-                         headers={"Authorization": f"Bearer {admin_token}"})
+                         headers={"X-Userinfo": admin_token})
         assert res.status_code in [200, 400]
 
 
@@ -283,7 +283,7 @@ class TestGetLatestFuelPriceInvalidType:
         # "kerosene" is not a valid fuel_type — route fetches from DB, returns 404 if not found
         with patch("app.models.fuel_price.FuelPriceModel.get_latest", return_value=None):
             res = client.get("/api/fuel-prices/latest/kerosene",
-                             headers={"Authorization": f"Bearer {admin_token}"})
+                             headers={"X-Userinfo": admin_token})
         assert res.status_code == 404
 
     def test_all_valid_fuel_types_as_latest(self, client, admin_token):
@@ -291,6 +291,6 @@ class TestGetLatestFuelPriceInvalidType:
             fp = {"_id": f"fp-{ftype}", "fuel_type": ftype, "price_per_unit": 100.0, "unit": "liter", "currency": "BDT", "effective_from": "2025-01-01"}
             with patch("app.models.fuel_price.FuelPriceModel.get_latest", return_value=fp):
                 res = client.get(f"/api/fuel-prices/latest/{ftype}",
-                                 headers={"Authorization": f"Bearer {admin_token}"})
+                                 headers={"X-Userinfo": admin_token})
             assert res.status_code == 200, f"fuel_type '{ftype}' should be accessible"
             assert res.get_json()["data"]["fuel_price"]["fuel_type"] == ftype

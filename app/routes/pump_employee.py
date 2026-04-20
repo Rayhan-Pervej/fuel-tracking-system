@@ -6,6 +6,8 @@ from app.models.pump_employee import PumpEmployeeModel
 from app.schemas.pump_employee import AddPumpEmployeeSchema, UpdatePumpEmployeeRoleSchema
 from app.constants import get_cursor_params, success_response, created_response, cursor_response, error_response
 from app.middleware.auth import require_auth, require_role
+import requests
+from app.services import keycloak_service
 
 pump_employee_bp = Blueprint("pump_employee", __name__)
 add_schema = AddPumpEmployeeSchema()
@@ -52,13 +54,22 @@ def add_employee(pump_id):
         if data["role"] == "pump_admin" and g.role != "admin":
             return jsonify(error_response(403, "Only admin can create a new pump admin")), 403
         try:
-            user = UserModel.create(
+            keycloak_id = keycloak_service.create_user(
                 name=data["name"],
                 email=data["email"],
                 password=data["password"],
                 role="employee"
             )
+            user = UserModel.create(
+                name=data["name"],
+                email=data["email"],
+                role="employee",
+                user_id=keycloak_id
+            )
+        except requests.HTTPError as e:
+            return jsonify(error_response(502, f"Keycloak error: {e.response.text}")), 502
         except ValueError as e:
+            keycloak_service.delete_user(keycloak_id)
             return jsonify(error_response(409, str(e))), 409
 
     else:

@@ -11,5 +11,7 @@ flask-cors
 flask-limiter
 pytest
 PyJWT
+python-jose[cryptography]
 
 
+requests==2.33.1

@@ -15,7 +15,7 @@ class TestCreatePump:
         with patch("app.models.pump.PumpModel.exists_by_license", return_value=False), \
              patch("app.models.pump.PumpModel.create", return_value=PUMP):
             res = client.post("/api/pumps/", json=PUMP_PAYLOAD,
-                              headers={"Authorization": f"Bearer {admin_token}"})
+                              headers={"X-Userinfo": admin_token})
         assert res.status_code == 201
         assert res.get_json()["data"]["pump"]["_id"] == "pump-1"
 
@@ -25,26 +25,26 @@ class TestCreatePump:
 
     def test_forbidden_employee(self, client, employee_token):
         res = client.post("/api/pumps/", json=PUMP_PAYLOAD,
-                          headers={"Authorization": f"Bearer {employee_token}"})
+                          headers={"X-Userinfo": employee_token})
         assert res.status_code == 403
 
     def test_duplicate_license(self, client, admin_token):
         with patch("app.models.pump.PumpModel.exists_by_license", return_value=True):
             res = client.post("/api/pumps/", json=PUMP_PAYLOAD,
-                              headers={"Authorization": f"Bearer {admin_token}"})
+                              headers={"X-Userinfo": admin_token})
         assert res.status_code == 409
 
     def test_missing_name(self, client, admin_token):
         bad = {k: v for k, v in PUMP_PAYLOAD.items() if k != "name"}
         res = client.post("/api/pumps/", json=bad,
-                          headers={"Authorization": f"Bearer {admin_token}"})
+                          headers={"X-Userinfo": admin_token})
         assert res.status_code == 400
         assert "name" in res.get_json()["errors"]
 
     def test_missing_license(self, client, admin_token):
         bad = {k: v for k, v in PUMP_PAYLOAD.items() if k != "license"}
         res = client.post("/api/pumps/", json=bad,
-                          headers={"Authorization": f"Bearer {admin_token}"})
+                          headers={"X-Userinfo": admin_token})
         assert res.status_code == 400
         assert "license" in res.get_json()["errors"]
 
@@ -53,13 +53,13 @@ class TestCreatePump:
         with patch("app.models.pump.PumpModel.exists_by_license", return_value=False), \
              patch("app.models.pump.PumpModel.create", return_value=PUMP):
             res = client.post("/api/pumps/", json=bad,
-                              headers={"Authorization": f"Bearer {admin_token}"})
+                              headers={"X-Userinfo": admin_token})
         # location may be optional — just verify it doesn't crash
         assert res.status_code in [201, 400]
 
     def test_empty_body(self, client, admin_token):
         res = client.post("/api/pumps/", json={},
-                          headers={"Authorization": f"Bearer {admin_token}"})
+                          headers={"X-Userinfo": admin_token})
         assert res.status_code == 400
 
 
@@ -67,21 +67,21 @@ class TestGetPump:
     def test_get_existing(self, client, admin_token):
         with patch("app.models.pump.PumpModel.get_by_id", return_value=PUMP):
             res = client.get("/api/pumps/pump-1",
-                             headers={"Authorization": f"Bearer {admin_token}"})
+                             headers={"X-Userinfo": admin_token})
         assert res.status_code == 200
         assert res.get_json()["data"]["pump"]["_id"] == "pump-1"
 
     def test_get_as_employee(self, client, employee_token):
         with patch("app.models.pump.PumpModel.get_by_id", return_value=PUMP):
             res = client.get("/api/pumps/pump-1",
-                             headers={"Authorization": f"Bearer {employee_token}"})
+                             headers={"X-Userinfo": employee_token})
         assert res.status_code == 200
 
 
     def test_get_nonexistent(self, client, admin_token):
         with patch("app.models.pump.PumpModel.get_by_id", return_value=None):
             res = client.get("/api/pumps/bad-id",
-                             headers={"Authorization": f"Bearer {admin_token}"})
+                             headers={"X-Userinfo": admin_token})
         assert res.status_code == 404
 
     def test_no_token(self, client):
@@ -94,21 +94,21 @@ class TestGetAllPumps:
         pumps = [PUMP]
         with patch("app.services.pump_service.PumpService.get_filtered", return_value=(pumps, None, False)):
             res = client.get("/api/pumps/",
-                             headers={"Authorization": f"Bearer {admin_token}"})
+                             headers={"X-Userinfo": admin_token})
         assert res.status_code == 200
         assert len(res.get_json()["data"]["pumps"]) == 1
 
     def test_accessible_by_any_authenticated_user(self, client, employee_token):
         with patch("app.services.pump_service.PumpService.get_filtered", return_value=([PUMP], None, False)):
             res = client.get("/api/pumps/",
-                             headers={"Authorization": f"Bearer {employee_token}"})
+                             headers={"X-Userinfo": employee_token})
         assert res.status_code == 200
 
     def test_filter_by_location(self, client, admin_token):
         pumps = [PUMP]
         with patch("app.services.pump_service.PumpService.get_filtered", return_value=(pumps, None, False)) as mock_svc:
             res = client.get("/api/pumps/?location=Dhaka",
-                             headers={"Authorization": f"Bearer {admin_token}"})
+                             headers={"X-Userinfo": admin_token})
         assert res.status_code == 200
         mock_svc.assert_called_once()
 
@@ -116,7 +116,7 @@ class TestGetAllPumps:
         pumps = [PUMP]
         with patch("app.services.pump_service.PumpService.get_filtered", return_value=(pumps, None, False)) as mock_svc:
             res = client.get("/api/pumps/?license=P-001",
-                             headers={"Authorization": f"Bearer {admin_token}"})
+                             headers={"X-Userinfo": admin_token})
         assert res.status_code == 200
         mock_svc.assert_called_once()
 
@@ -124,7 +124,7 @@ class TestGetAllPumps:
         pumps = [PUMP]
         with patch("app.services.pump_service.PumpService.get_filtered", return_value=(pumps, None, False)) as mock_svc:
             res = client.get("/api/pumps/?name=Shell",
-                             headers={"Authorization": f"Bearer {admin_token}"})
+                             headers={"X-Userinfo": admin_token})
         assert res.status_code == 200
         mock_svc.assert_called_once()
         assert mock_svc.call_args.kwargs.get("name") == "Shell"
@@ -132,7 +132,7 @@ class TestGetAllPumps:
     def test_filter_by_location_license_and_name(self, client, admin_token):
         with patch("app.services.pump_service.PumpService.get_filtered", return_value=([PUMP], None, False)) as mock_svc:
             res = client.get("/api/pumps/?location=Dhaka&license=P-001&name=Shell",
-                             headers={"Authorization": f"Bearer {admin_token}"})
+                             headers={"X-Userinfo": admin_token})
         assert res.status_code == 200
         mock_svc.assert_called_once()
         assert mock_svc.call_args.kwargs.get("name") == "Shell"
@@ -140,7 +140,7 @@ class TestGetAllPumps:
     def test_empty_result(self, client, admin_token):
         with patch("app.services.pump_service.PumpService.get_filtered", return_value=([], None, False)):
             res = client.get("/api/pumps/",
-                             headers={"Authorization": f"Bearer {admin_token}"})
+                             headers={"X-Userinfo": admin_token})
         assert res.status_code == 200
         assert res.get_json()["data"]["pumps"] == []
 
@@ -148,7 +148,7 @@ class TestGetAllPumps:
         pumps = [PUMP] * 5
         with patch("app.services.pump_service.PumpService.get_filtered", return_value=(pumps, "cursor-abc", True)):
             res = client.get("/api/pumps/?limit=5",
-                             headers={"Authorization": f"Bearer {admin_token}"})
+                             headers={"X-Userinfo": admin_token})
         body = res.get_json()
         assert body["data"]["pagination"]["has_more"] is True
         assert body["data"]["pagination"]["next_cursor"] == "cursor-abc"
@@ -157,7 +157,7 @@ class TestGetAllPumps:
         pumps = [{"_id": f"pump-{i}", "name": f"Pump {i}", "location": "Dhaka", "license": f"P-{i:03d}"} for i in range(100)]
         with patch("app.services.pump_service.PumpService.get_filtered", return_value=(pumps, "next", True)):
             res = client.get("/api/pumps/?limit=100",
-                             headers={"Authorization": f"Bearer {admin_token}"})
+                             headers={"X-Userinfo": admin_token})
         assert res.status_code == 200
         assert len(res.get_json()["data"]["pumps"]) == 100
 
@@ -167,12 +167,12 @@ class TestGetAllPumps:
 
     def test_invalid_limit(self, client, admin_token):
         res = client.get("/api/pumps/?limit=abc",
-                         headers={"Authorization": f"Bearer {admin_token}"})
+                         headers={"X-Userinfo": admin_token})
         assert res.status_code == 400
 
     def test_invalid_negative_limit(self, client, admin_token):
         res = client.get("/api/pumps/?limit=-1",
-                         headers={"Authorization": f"Bearer {admin_token}"})
+                         headers={"X-Userinfo": admin_token})
         assert res.status_code == 400
 
 
@@ -182,7 +182,7 @@ class TestUpdatePump:
         with patch("app.models.pump.PumpModel.get_by_id", return_value=PUMP), \
              patch("app.models.pump.PumpModel.update", return_value=updated):
             res = client.patch("/api/pumps/pump-1", json={"name": "New Name"},
-                               headers={"Authorization": f"Bearer {admin_token}"})
+                               headers={"X-Userinfo": admin_token})
         assert res.status_code == 200
         assert res.get_json()["data"]["pump"]["name"] == "New Name"
 
@@ -191,7 +191,7 @@ class TestUpdatePump:
         with patch("app.models.pump.PumpModel.get_by_id", return_value=PUMP), \
              patch("app.models.pump.PumpModel.update", return_value=updated):
             res = client.patch("/api/pumps/pump-1", json={"location": "Chittagong"},
-                               headers={"Authorization": f"Bearer {admin_token}"})
+                               headers={"X-Userinfo": admin_token})
         assert res.status_code == 200
         assert res.get_json()["data"]["pump"]["location"] == "Chittagong"
 
@@ -201,13 +201,13 @@ class TestUpdatePump:
              patch("app.models.pump.PumpModel.exists_by_license", return_value=False), \
              patch("app.models.pump.PumpModel.update", return_value=updated):
             res = client.patch("/api/pumps/pump-1", json={"license": "P-002"},
-                               headers={"Authorization": f"Bearer {admin_token}"})
+                               headers={"X-Userinfo": admin_token})
         assert res.status_code == 200
 
     def test_not_found(self, client, admin_token):
         with patch("app.models.pump.PumpModel.get_by_id", return_value=None):
             res = client.patch("/api/pumps/bad-id", json={"location": "Chittagong"},
-                               headers={"Authorization": f"Bearer {admin_token}"})
+                               headers={"X-Userinfo": admin_token})
         assert res.status_code == 404
 
     def test_no_token(self, client):
@@ -216,21 +216,21 @@ class TestUpdatePump:
 
     def test_forbidden_employee(self, client, employee_token):
         res = client.patch("/api/pumps/pump-1", json={"location": "Chittagong"},
-                           headers={"Authorization": f"Bearer {employee_token}"})
+                           headers={"X-Userinfo": employee_token})
         assert res.status_code == 403
 
 
     def test_empty_body(self, client, admin_token):
         with patch("app.models.pump.PumpModel.get_by_id", return_value=PUMP):
             res = client.patch("/api/pumps/pump-1", json={},
-                               headers={"Authorization": f"Bearer {admin_token}"})
+                               headers={"X-Userinfo": admin_token})
         assert res.status_code == 400
 
     def test_duplicate_license(self, client, admin_token):
         with patch("app.models.pump.PumpModel.get_by_id", return_value=PUMP), \
              patch("app.models.pump.PumpModel.exists_by_license", return_value=True):
             res = client.patch("/api/pumps/pump-1", json={"license": "P-002"},
-                               headers={"Authorization": f"Bearer {admin_token}"})
+                               headers={"X-Userinfo": admin_token})
         assert res.status_code == 409
 
     def test_same_license_no_conflict(self, client, admin_token):
@@ -239,7 +239,7 @@ class TestUpdatePump:
         with patch("app.models.pump.PumpModel.get_by_id", return_value=PUMP), \
              patch("app.models.pump.PumpModel.update", return_value=updated):
             res = client.patch("/api/pumps/pump-1", json={"license": "P-001"},
-                               headers={"Authorization": f"Bearer {admin_token}"})
+                               headers={"X-Userinfo": admin_token})
         assert res.status_code == 200
 
 
@@ -249,13 +249,13 @@ class TestDeletePump:
              patch("app.models.pump_employee.PumpEmployeeModel.remove_by_pump"), \
              patch("app.models.pump.PumpModel.delete"):
             res = client.delete("/api/pumps/pump-1",
-                                headers={"Authorization": f"Bearer {admin_token}"})
+                                headers={"X-Userinfo": admin_token})
         assert res.status_code == 200
 
     def test_not_found(self, client, admin_token):
         with patch("app.models.pump.PumpModel.get_by_id", return_value=None):
             res = client.delete("/api/pumps/bad-id",
-                                headers={"Authorization": f"Bearer {admin_token}"})
+                                headers={"X-Userinfo": admin_token})
         assert res.status_code == 404
 
     def test_no_token(self, client):
@@ -264,6 +264,6 @@ class TestDeletePump:
 
     def test_forbidden_employee(self, client, employee_token):
         res = client.delete("/api/pumps/pump-1",
-                            headers={"Authorization": f"Bearer {employee_token}"})
+                            headers={"X-Userinfo": employee_token})
         assert res.status_code == 403
 

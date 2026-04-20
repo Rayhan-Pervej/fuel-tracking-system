@@ -90,7 +90,6 @@ def create_transaction():
 
 @transaction_bp.route('/', methods=['GET'])
 @require_auth
-@require_role("admin")
 def get_transactions():
     cursor, limit = get_cursor_params(request)
     if limit is None:

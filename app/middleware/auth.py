@@ -1,27 +1,28 @@
+import base64
+import json
 from functools import wraps
-from flask import request, jsonify, g, current_app
-import jwt
+from flask import request, jsonify, g
 from app.constants import error_response
 
 
 def require_auth(f):
     @wraps(f)
     def decorated(*args, **kwargs):
-        # token = request.headers.get("Authorization", "").replace("Bearer ", "")
-        header = request.headers.get("Authorization", "")
-        parts = header.split(" ", 1)
-        token = parts[1] if len(parts) == 2 and parts[0] == "Bearer" else ""
-
-        if not token:
+        userinfo_header = request.headers.get("X-Userinfo", "")
+        if not userinfo_header:
             return jsonify(error_response(401, "Authorization token is missing")), 401
         try:
-            payload = jwt.decode(token, current_app.config["JWT_SECRET_KEY"], algorithms=["HS256"])
-            g.user_id = payload["user_id"]
-            g.role = payload.get("role", "customer")
-        except jwt.ExpiredSignatureError:
-            return jsonify(error_response(401, "Token has expired")), 401
-        except jwt.InvalidTokenError:
-            return jsonify(error_response(401, "Invalid token")), 401
+            userinfo = json.loads(base64.b64decode(userinfo_header + "==").decode("utf-8"))
+            g.user_id = userinfo.get("sub")
+            roles = userinfo.get("realm_access", {}).get("roles", [])
+            if "admin" in roles:
+                g.role = "admin"
+            elif "employee" in roles:
+                g.role = "employee"
+            else:
+                g.role = "employee"
+        except Exception:
+            return jsonify(error_response(401, "Invalid authorization info")), 401
         return f(*args, **kwargs)
     return decorated
 

@@ -1,6 +1,6 @@
 import logging
 from flask import Flask, render_template
-from flask_cors import CORS
+# from flask_cors import CORS
 from app import extensions
 from app.config import Config, validate_config
 from app.extensions import mongo, socketio, limiter
@@ -34,7 +34,7 @@ def _create_indexes():
 def create_app():
     validate_config()
     app = Flask(__name__)
-    CORS(app)
+    # CORS(app)
     limiter.init_app(app)
     app.config.from_object(Config)
     mongo.init_app(app)

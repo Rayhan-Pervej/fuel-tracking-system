@@ -1,8 +1,11 @@
 import logging
 import time
 from app.extensions import mongo, socketio
-from flask import current_app, request
-import jwt
+from flask import request
+from jose import jwt as jose_jwt
+from jose.exceptions import JWTError
+import requests as http
+
 from flask_socketio import emit, disconnect, join_room
 from app.models.pump_employee import PumpEmployeeModel
 from app.constants import FUEL_TYPES
@@ -141,13 +144,16 @@ def on_connect(auth=None):
         disconnect()
         return
     try:
-        payload = jwt.decode(token, current_app.config["JWT_SECRET_KEY"], algorithms=["HS256"])
-    except jwt.InvalidTokenError:
+        jwks_url = "http://keycloak:8080/realms/fuel-app/protocol/openid-connect/certs"
+        jwks = http.get(jwks_url).json()
+        payload = jose_jwt.decode(token, jwks, algorithms=["RS256"], options={"verify_aud": False})
+    except JWTError:
         disconnect()
         return
 
-    role = payload.get("role")
-    user_id = payload.get("user_id")
+    roles = payload.get("realm_access", {}).get("roles", [])
+    role = "admin" if "admin" in roles else "employee"
+    user_id = payload.get("sub")
     if not user_id:
         disconnect()
         return

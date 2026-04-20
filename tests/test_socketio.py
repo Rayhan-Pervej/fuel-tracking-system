@@ -7,7 +7,7 @@ import jwt
 import pytest
 
 
-SECRET_KEY = "test-secret"
+SECRET_KEY = "test-secret-key-that-is-long-enough-32b"
 
 
 BASE_TRANSACTIONS = [
@@ -109,8 +109,9 @@ def sio_setup():
             disconnect()
             return
 
-        role = payload.get("role")
-        user_id = payload.get("user_id")
+        roles = payload.get("realm_access", {}).get("roles", [])
+        role = "admin" if "admin" in roles else "employee"
+        user_id = payload.get("sub")
 
         if role == "admin":
             scope = {"pump_id": None}
@@ -140,7 +141,7 @@ def sio_setup():
 
 
 def make_token(user_id="admin-1", role="admin"):
-    return jwt.encode({"user_id": user_id, "role": role}, SECRET_KEY, algorithm="HS256")
+    return jwt.encode({"sub": user_id, "realm_access": {"roles": [role]}}, SECRET_KEY, algorithm="HS256")
 
 
 class TestSocketIOConnect:
